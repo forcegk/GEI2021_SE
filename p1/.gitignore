@@ -1,0 +1,11 @@
+*.uvgui.*
+*.uvopt
+*.htm
+*.d
+*.lst
+*.o
+*.axf
+*.lnp
+*.map
+*.dep
+*.bak
