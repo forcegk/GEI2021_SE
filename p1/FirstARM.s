@@ -54,25 +54,6 @@ __rt_entry PROC
 
 ; - Main Program ------------------------------------------
 
-	AREA 	MainCode, CODE, READONLY, ALIGN=3
-		
-;main			PROC
-;	EXPORT main
-;	MOV R0, #1;
-;	LDR R1, =LIST;		Puntero al primer valor de la lista
-;	LDR R2,[R1];		Cargamos el valor
-;LOOP
-;	STR R0, [R1]
-;	ADD R1,R1,#4
-;	LDR R2, [R1]
-;	CMP R2,#60
-;	BNE LOOP
-	
-;	ENDP
-;- LOOP END -----
-;	END
-
-
 ; OBJETIVO:
 ; for(int i = 1; i<N && v[i]^2 <= N; i++){
 ;	 if(m[i] != 1){
@@ -80,6 +61,8 @@ __rt_entry PROC
 ;			 m[j] = 1
 ; 	 }
 ; }
+
+	AREA 	MainCode, CODE, READONLY, ALIGN=3
 
 main			PROC
 	; Asumo short = 16 bits
@@ -98,12 +81,12 @@ OUTER_LOOP
 	; first loop exit conditions
 	CMP R0, R5;
 	ADD R0, R0, #1
-	BGE GIT_OUTA_HERE_BOI; if i>=N exit
+	BGE GIT_OUTA_HERE	; if i>=N exit
 	
 	LDRH R6, [R2], #2	; R6 = v[i_v]<-- short ; i_v++
 	MUL R8, R6, R6		; R8 = v[i_v]^2
 	CMP R8, R5;
-	BGT GIT_OUTA_HERE_BOI; if v[i]^2 > N exit
+	BGT GIT_OUTA_HERE	; if v[i]^2 > N exit
 	
 	
 	; if (m[i] == 1) { continue; }
@@ -134,7 +117,8 @@ INNER_LOOP
 
 ;- OUTER_LOOP END -----
 	
-GIT_OUTA_HERE_BOI
+GIT_OUTA_HERE
 	ENDP
-;- LOOP END -----
+		
+;- PROGRAM END -----
 	END

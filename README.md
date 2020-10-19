@@ -1,3 +1,3 @@
 # GEI2021_SE
 
-- [] Práctica 1
+- [x] Práctica 1
