@@ -69,7 +69,7 @@ main			PROC
 	; 		char  = 8 bits
 	
 	EXPORT main
-	MOV R0, #1; int i = 1 (signed)
+	;[ ELIMINAR R0 PARA i] MOV R0, #1; int i = 1 (signed)
 	;   R1 == j
 	LDR R2, =LIST_v;		(unsigned short) Puntero al primer valor de v  (v[1] ???)
 	ADD R2, R2, #2
@@ -77,16 +77,22 @@ main			PROC
 	; R4 == 2a copia de LIST_m     Haremos otra copia de &LIST_m para usar con m[j] más tarde
 	MOV R5, #32; int N = 32 (signed)
 	
+	; Queremos dejar de usar R0 para almacenar el valor de i, para usar un valor que calculemos ya de por si,
+	; y no tener que realizar el ADD R0, R0, #1 para contar el numero de iteraciones
+	; Para esto vamos a almacenar en R0, en vez del valor de i, el valor de la dirección que tomaría v[i] en la última iteración
+	; Guardamos en R0 la dirección base de v, mas N*<tamaño en bytes de unsigned short> == N*2 == N<<1
+	ADD R0, R2, R5, LSL #1
+	
 OUTER_LOOP
 	; first loop exit conditions
-	CMP R0, R5;
-	ADD R0, R0, #1
-	BGE GIT_OUTA_HERE	; if i>=N exit
+	CMP R2, R0;
+	; queremos eliminar el contador de i ;  ADD R0, R0, #1
+	BGE DONE	; if i>=N exit
 	
 	LDRH R6, [R2], #2	; R6 = v[i_v]<-- short ; i_v++
 	MUL R8, R6, R6		; R8 = v[i_v]^2
 	CMP R8, R5;
-	BGT GIT_OUTA_HERE	; if v[i]^2 > N exit
+	BGT DONE	; if v[i]^2 > N exit
 	
 	
 	; if (m[i] == 1) { continue; }
@@ -117,7 +123,7 @@ INNER_LOOP
 
 ;- OUTER_LOOP END -----
 	
-GIT_OUTA_HERE
+DONE
 	ENDP
 		
 ;- PROGRAM END -----
