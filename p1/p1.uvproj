@@ -406,9 +406,9 @@
           <GroupName>Source Group 1</GroupName>
           <Files>
             <File>
-              <FileName>FirstARM.s</FileName>
+              <FileName>p1.s</FileName>
               <FileType>2</FileType>
-              <FilePath>.\FirstARM.s</FilePath>
+              <FilePath>.\p1.s</FilePath>
             </File>
           </Files>
         </Group>
