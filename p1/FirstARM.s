@@ -69,58 +69,77 @@ main			PROC
 	; 		char  = 8 bits
 	
 	EXPORT main
-	;[ ELIMINAR R0 PARA i] MOV R0, #1; int i = 1 (signed)
-	;   R1 == j
-	LDR R2, =LIST_v;		(unsigned short) Puntero al primer valor de v  (v[1] ???)
-	ADD R2, R2, #2
-	LDR R3, =LIST_m;		(signed char)
+	MOV R9, #1	; Cargamos el 1 en R9
+	LDR R2, =LIST_v			;(unsigned short) == 2 Bytes
+	LDR R3, =LIST_m;		;(signed char) == 1 Byte
+	
 	; R4 == 2a copia de LIST_m     Haremos otra copia de &LIST_m para usar con m[j] más tarde
-	MOV R5, #32; int N = 32 (signed)
+	MOV R5, #32				; Guardamos int N = 32 (signed)
+	
+	;; ------ Optimizaciones implementadas ------ ;;
+	; Contexto: En la primera versión de la implementación, utilizábamos R0 para guardar el valor de i
+	;			y R1 para guardar el valor de j.
+	; 			Sin embargo se puede inferir el valor de éstas calculando con direcciones máximas
 	
 	; Queremos dejar de usar R0 para almacenar el valor de i, para usar un valor que calculemos ya de por si,
 	; y no tener que realizar el ADD R0, R0, #1 para contar el numero de iteraciones
-	; Para esto vamos a almacenar en R0, en vez del valor de i, el valor de la dirección que tomaría v[i] en la última iteración
+	; Para esto vamos a almacenar en R0, en vez del valor de i, el valor de la dirección que tomaría v[i] en la última iteración (v{i_max])
 	; Guardamos en R0 la dirección base de v, mas N*<tamaño en bytes de unsigned short> == N*2 == N<<1
 	ADD R0, R2, R5, LSL #1
 	
-OUTER_LOOP
-	; first loop exit conditions
-	CMP R2, R0;
-	; queremos eliminar el contador de i ;  ADD R0, R0, #1
-	BGE DONE	; if i>=N exit
+	; Ahora ya podemos poner el offset al principio, ya que como empezamos a contar por uno, hay que sumarle 1*sizeof(short)
+	ADD R2, R2, #2			; No podíamos hacerlo antes porque dependíamos de R2 para la suma anterior
 	
-	LDRH R6, [R2], #2	; R6 = v[i_v]<-- short ; i_v++
+	; Aquí la calculamos para j:
+	; Calculamos la dirección máxima que puede alcanzar m[j] (m[j_max]), con esto podemos
+	; llevar la cuenta de j sin tener que usar un registro para ello, y nos ahorramos operaciones
+	; Recordemos que m es array de shorts
+	ADD R1, R3, R5, LSL #0	
+					
+	
+OUTER_LOOP
+	; Primera exit condition [ i < N ]
+	CMP R2, R0;
+	BGE DONE			; if i >= N exit
+	
+	; Segunda exit condition [ v[i]^2 <= N ]
+	LDRH R6, [R2], #2	; R6 = v[i_v] ; i_v++
 	MUL R8, R6, R6		; R8 = v[i_v]^2
 	CMP R8, R5;
-	BGT DONE	; if v[i]^2 > N exit
+	BGT DONE			; if v[i]^2 > N exit
 	
 	
-	; if (m[i] == 1) { continue; }
+	; Comprobamos si m[i] == 1, para ejecutar el código interior, esto es equivalente a escribir:
+	; 	if (m[i] == 1) { continue; }
 	LDRSB R7, [R3], #1	; R7 = m[i] ; i_m++
 	TEQ R7, #1
 	BEQ OUTER_LOOP		; if m[i] == 1 continue
 	
-	; else
-	MOV R1, R8	; j = v[i_v]^2
-	MOV R8, #1
+	; Si no hemos hecho el "continue", ejecutamos el código aquí
 	; Calculamos m[j] para la primera iteración
-	LDR R4, =LIST_m	; m[]
-	ADD R4, R4, R1		; m[j]
+	LDR R4, =LIST_m				; Cargamos la dirección base de m (la necesitamos ya que en cada iteración j es diferente)
+	ADD R4, R4, R8, LSL #0		; Aquí calculamos la dirección de la primera m[j] (m[j_1])
+
+
 INNER_LOOP
-	; R6 = v[i_v]
-	CMP R1, R5	; j vs N
-	BGE OUTER_LOOP	; salimos del for interior cuando j>=N
+	CMP R4, R1		; &m[j_curr] vs &m[j_max]
+	BGE OUTER_LOOP	; if j>=N exit  <==> if &m[j] >= &m[N] exit --- Es decir, que salimos del for interior cuando j>=N
 	
-	;STRB #1, [R5]
-	; guardar m[j] =1 
-	STRB R4, [R8] ; R4 = 1
-	ADD R1, R1, R6; j = j + v[i]
-	ADD R4, R4, R6, LSL #0; m[j] es m[j_antiguo] + 1*v[i] (1 y no 4 porque son chars)
+	; Guardamos 1 en m[j]
+	; Otra optimización que hice aquí es cargar el 1 en R9 al principio.
+	; Ya que puedo usar todos los registros a mi conveniencia, por qué no dejar el 1 ahí desde el principio, en vez
+	; de ejecutar una instrucción MOV en cada iteración del bucle interior?
+	STRB R4, [R9] ; R9 = 1
+	
+	; Me gustaría poder integrar este ADD en el anterior STRB, pero creo que no es posible
+	ADD R4, R4, R6, LSL #0	;&m[j_next] = ( (&m[j_curr]) + v[i]*sizeof(char) )
+							;	R4 = &m[j]
+							;	R6 = v[i]
+
 	B INNER_LOOP
 ;- INNER_LOOP END -----
 
 	B OUTER_LOOP
-
 ;- OUTER_LOOP END -----
 	
 DONE
