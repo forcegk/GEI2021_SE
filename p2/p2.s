@@ -59,7 +59,8 @@ __rt_entry PROC
 ;													      ;
 ;		  - En las funciones, los registros			      ;
 ;		tienen flechas tal que -> y <-				      ;
-;		  - reg <- [recibe o devuelve un parámetro]       ;
+;		  - reg <- [recibe un parámetro]       			  ;
+;		  - reg <= [devuelve un parámetro]				  ;
 ;		  - reg -> [indica qué valor almacenamos          ;
 ;		en ese registro y cómo cambia durante la		  ;
 ;		ejecución de la subrutina]       				  ;
@@ -67,7 +68,7 @@ __rt_entry PROC
 
 ;- int pow(int n, int m) ----------------------------------
 pow
-	; r0 <- returned value n^m [nm]
+	; r0 <= returned value n^m [nm]
 	;	 -> we store here partial power [nm]
 	; r1 <- base [n]
 	; r2 <- power [m]
@@ -88,7 +89,7 @@ pow_for_1_end
 
 ;- int get_num_digits(int num) ----------------------------
 get_num_digits
-	; r0 <- returned value [count]
+	; r0 <= returned value [count]
 	;	 -> we store here partial count [count]
 	; r1 <- number [num]
 	;    -> it decrements each for cycle
@@ -110,7 +111,7 @@ get_num_digits_for_1_end
 
 ;- int get_narcissist_count_under(int num) ----------------
 get_narcissist_count_under
-	; r0 <- returned value narcissist_count_under N [count]
+	; r0 <= returned value narcissist_count_under N [count]
 	;	 -> we store here partial count [count]
 	; r1 <- number [num] (N)
 	; r2 -> the division result for each for inner loop[partial]
@@ -118,7 +119,7 @@ get_narcissist_count_under
 	; r3 -> the number of digits [num_digits]
 	; r4 -> the accumulator for comparing to the original number [acc]
 	; r5 -> the number modulo 10 [nmod10]
-	; r6 -> iterator [i]
+	; r6 -> Now we use it for storing result of division [Previously ; NOT NECESSARY NOW r6 -> iterator [i].]
 	; r7 -> constant value 10
 	
 	push {r4, r5, r6, r7, lr}	; save the registers
@@ -141,14 +142,15 @@ get_narcissist_count_under_for_1_begin
 		mov		r4, #0	; acc = 0
 		mov		r6, #0	; i = 0
 get_narcissist_count_under_for_2_begin
-			cmp	r6, r3	; i vs num_digits
-			bge	get_narcissist_count_under_for_2_end	; if i>=num_digits => end inner loop
+			;cmp	r6, r3	; i vs num_digits
+			cmp		r2, #0
+			ble	get_narcissist_count_under_for_2_end	; if i>=num_digits => end inner loop
 			
 			; modulo op
 			udiv r5, r2, r7 ; get the int division
 			
 			; we store partial/10 so we don't need to repeat
-			push {r5}		; we store partial / 10 in the stack
+			mov r6, r5		; now we have r6 free
 			
 			mul	 r5, r5, r7 ; multiply by the divisor
 			sub  r5, r2, r5 ; get the difference
@@ -162,11 +164,11 @@ get_narcissist_count_under_for_2_begin
 			pop  {r0, r1, r2, r3} ; aaand restore them
 			
 			
-			; and we restore partial/10 to r2 manually (because we need to restore it to a different register)
-			pop  {r5}
-			mov  r2, r5
+			; and we restore partial/10 to r2
+			mov  r2, r6
 			
-			add	r6, r6, #1
+			; not necessary now
+			;add	r6, r6, #1
 			b	get_narcissist_count_under_for_2_begin
 get_narcissist_count_under_for_2_end
 		
@@ -189,7 +191,7 @@ main			PROC
 	LDR R1, =N
 	LDR R1, [R1]
 	
-	ORR R0, R0, R0
+	; para medir ciclos (breakpoint 1)
 	ORR R0, R0, R0
 	
 	; push {r0, r1, r2, r3} ; no nos sirve para nada en especial
@@ -198,13 +200,9 @@ main			PROC
 	
 	; pop  {r0, r1, r2, r3} ; idem
 	
-	ORR R0, R0, R0
+	; para medir ciclos (breakpoint 2)
 	ORR R0, R0, R0
 	
-	
-
-
-DONE
 	ENDP
 		
 ;- PROGRAM END -----
