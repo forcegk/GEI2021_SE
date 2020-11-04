@@ -69,18 +69,19 @@ __rt_entry PROC
 ;- int pow(int n, int m) ----------------------------------
 pow
 	; r0 <= returned value n^m [nm]
+	;	 <- base [n]
 	;	 -> we store here partial power [nm]
-	; r1 <- base [n]
-	; r2 <- power [m]
+	; r1 <- power [m]
 	;    -> it decrements each for cycle
+	; r2 -> we store here the base
 	
-	mov r0, r1
+	mov r2, r0
 pow_for_1_begin
-		cmp r2, #1
+		cmp r1, #1
 		ble pow_for_1_end
 		
-		mul r0, r0, r1
-		sub r2, r2, #1
+		mul r0, r0, r2
+		sub r1, r1, #1
 		b pow_for_1_begin
 
 pow_for_1_end
@@ -90,97 +91,99 @@ pow_for_1_end
 ;- int get_num_digits(int num) ----------------------------
 get_num_digits
 	; r0 <= returned value [count]
-	;	 -> we store here partial count [count]
-	; r1 <- number [num]
-	;    -> it decrements each for cycle
+	;	 <- number [num]
+	;	 -> it decrements each for cycle
+	; r1 -> we store here partial count [count]
 	; r2 -> here we store the constant value 10
 	
-	mov r0, #1
+	mov r1, #1
 	mov r2, #10
 get_num_digits_for_1_begin
-		udiv r1, r1, r2
-		cmp r1, #0
+		udiv r0, r0, r2
+		cmp r0, #0
 		ble get_num_digits_for_1_end
 		
-		add r0, r0, #1
+		add r1, r1, #1
 		b get_num_digits_for_1_begin
 
 get_num_digits_for_1_end
+		mov r0, r1
 		bx lr
 ;- END int get_num_digits(int num) ------------------------
 
 ;- int get_narcissist_count_under(int num) ----------------
 get_narcissist_count_under
 	; r0 <= returned value narcissist_count_under N [count]
-	;	 -> we store here partial count [count]
-	; r1 <- number [num] (N)
-	; r2 -> the division result for each for inner loop[partial]
+	;	 <- number [num] (N)
+	;
+	; r4 -> we store here partial count [count]
+	; r5 -> we copy here number [num] from r0
+	; r2-6 -> the division result for each for inner loop[partial]
 	;    -> also used while in the stack to store the result from calling pow
-	; r3 -> the number of digits [num_digits]
-	; r4 -> the accumulator for comparing to the original number [acc]
-	; r5 -> the number modulo 10 [nmod10]
-	; r6 -> Now we use it for storing result of division [Previously ; NOT NECESSARY NOW r6 -> iterator [i].]
-	; r7 -> constant value 10
+	; r3-7 -> the number of digits [num_digits]
+	; r4-8 -> the accumulator for comparing to the original number [acc]
+	; r5-9 -> the number modulo 10 [nmod10]
+	; r7-10 -> constant value 10
+	; r6-11 -> Now we use it for storing result of division
 	
-	push {r4, r5, r6, r7, lr}	; save the registers
+	push {r4, r5, r6, r7, r8, r9, r10, r11, lr}	; save the registers
 	
-	mov r0, #0 ; count = 0
-	mov r7, #10; r7 = 10
+	mov r4, #0 ; count = 0
+	mov r5, r0 ; num = (received) num
+	mov r10, #10; r10 = 10
 	
 get_narcissist_count_under_for_1_begin
-		sub		r1, r1, #1  ; num -= 1
-		cmp		r1, #0
-		blt		get_narcissist_count_under_for_1_end
+		; Optimization: Single-digit numbers are always narcissistic.
+		cmp		r5, #10
+		ble		get_narcissist_count_under_for_1_end
+		sub		r5, r5, #1  ; num -= 1
 		
-		mov		r2, r1	; partial = num
+		mov		r6, r5	; partial = num
 		
-		push	{r0, r1, r2}	; save values (we don't care about r3)
+		; we don't care about r0-r3 so we do not need to push {r0, r1, r2, r3}
+		mov		r0, r5
 		bl		get_num_digits	; get_num_digits(r1 === num)
-		mov		r3, r0			; num_digits = returned value
-		pop		{r0, r1, r2}	; restore pre-subroutine values (but r3)
+		mov		r7, r0			; num_digits = returned value
+		; same here , we don't need pop {r0, r1, r2, r3}
 		
-		mov		r4, #0	; acc = 0
-		mov		r6, #0	; i = 0
+		mov		r8, #0	; acc = 0
 get_narcissist_count_under_for_2_begin
-			;cmp	r6, r3	; i vs num_digits
-			cmp		r2, #0
-			ble	get_narcissist_count_under_for_2_end	; if i>=num_digits => end inner loop
+			cmp		r6, #0		; partival vs 0
+			ble	get_narcissist_count_under_for_2_end	; if partial <= 0 { end inner loop }
 			
 			; modulo op
-			udiv r5, r2, r7 ; get the int division
+			udiv r9, r6, r10 ; get the int division (nmod10 = partial / 10)
 			
 			; we store partial/10 so we don't need to repeat
-			mov r6, r5		; now we have r6 free
+			mov r11, r9 ; (r11 holds partial / 10)
 			
-			mul	 r5, r5, r7 ; multiply by the divisor
-			sub  r5, r2, r5 ; get the difference
-			
-			
-			push {r0, r1, r2, r3} ; store the values in the stack
-			mov r1, r5		;			 r5 === nmod10
-			mov r2, r3		;		      				r3 === num_digits
-			bl  pow			;        pow(r5 === nmod10, r3 === num_digits)
-			add r4, r4, r0	; acc += pow(r5 === nmod10, r3 === num_digits)
-			pop  {r0, r1, r2, r3} ; aaand restore them
+			mul	 r9, r9, r10 ; multiply by the divisor (nmod10 = nmod10 * 10 = ((int)(partial/10)) * 10)
+			sub  r9, r6, r9 ; get the difference (nmod10 = partial-nmod10 = partial - ((int)(partial/10)) * 10 === remainder)
 			
 			
-			; and we restore partial/10 to r2
-			mov  r2, r6
+			mov r0, r9		;			 r9 === nmod10
+			mov r1, r7		;		      				r7 === num_digits
+			bl  pow			;        pow(r9 === nmod10, r7 === num_digits)
+			add r8, r8, r0	; acc += pow(r9 === nmod10, r7 === num_digits)
 			
-			; not necessary now
-			;add	r6, r6, #1
+			
+			; and we restore partial/10 to r6
+			mov  r6, r11
+			
 			b	get_narcissist_count_under_for_2_begin
 get_narcissist_count_under_for_2_end
 		
-		cmp r4, r1	; acc vs num
+		cmp r8, r5	; acc vs num
 		bne get_narcissist_count_under_skip_1
-		add r0, r0, #1
+		add r4, r4, #1
 		
 get_narcissist_count_under_skip_1
 		b get_narcissist_count_under_for_1_begin
 
 get_narcissist_count_under_for_1_end
-	pop {r4, r5, r6, r7, lr}	; restore the registers
+	;mov r0, r4
+	add r0, r4, r5		; r0 = (number_of_narcissistic_over_one_digit + number_of_one_digit_numbers_left)
+	pop  {r4, r5, r6, r7, r8, r9, r10, r11, lr}	; restore the registers
 	bx lr
 ;- END int get_narcissist_count_under(int num) ------------
 
@@ -188,20 +191,16 @@ get_narcissist_count_under_for_1_end
 main			PROC
 	EXPORT main
 	
-	LDR R1, =N
-	LDR R1, [R1]
+	LDR R0, =N
+	LDR R0, [R0]
 	
 	; para medir ciclos (breakpoint 1)
-	ORR R0, R0, R0
-	
-	; push {r0, r1, r2, r3} ; no nos sirve para nada en especial
+	ORR R1, R1, R1
 	
 	bl get_narcissist_count_under
 	
-	; pop  {r0, r1, r2, r3} ; idem
-	
 	; para medir ciclos (breakpoint 2)
-	ORR R0, R0, R0
+	ORR R1, R1, R1
 	
 	ENDP
 		

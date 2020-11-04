@@ -33,12 +33,12 @@ int get_num_digits(int num){
 }
 
 int get_narcissist_count_under(int num){
-	int count = 0; // r0
-	// num === r1
+	int count = 0; // return in r0 (we store it in r4)
+	// num === receive in r0 --> move to r5
 
 	// MOV in place
 	int partial, num_digits, acc, nmod10;
-	//     r2        r3       r4   r5
+	//     r6        r7       r8   r9
 	gncu_begin:
 	num = num - 1; 
 	if(num < 0) goto gncu_end;
