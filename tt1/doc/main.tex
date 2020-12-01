@@ -12,6 +12,7 @@
 \usepackage{csquotes}
 \usepackage{eurosym} 
 \usepackage{multirow}
+\usepackage{xcolor}
 \usepackage{graphicx}
 \usepackage[export]{adjustbox}
 \usepackage{url}
@@ -36,6 +37,11 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows,automata}
 
+% Things for Morse
+\newcommand{\punto}{\kern+0.3pt\raisebox{0.35ex}{\huge\textbf.}}
+\newcommand{\raya}{\kern+0.2pt\raisebox{-0.35ex}{\huge\textbf-}}
+
+% Para generar imágenes mock
 \usepackage{duckuments}
 
 \setpapersize{A4}       %  DIN A4
@@ -57,47 +63,154 @@
 \maketitle
 
 % Justificamos el texto
-\justifying
+\justifying{}
 
 \section{Introducción}
 En esta primera iteración de este trabajo tutelado, realizaremos una aproximación inicial al problema que como ingenieros
 tratamos de resolver.
 
-Nuestra misión es definir la máquina de estado finito (FSM) para un subconjunto del código morse, en concreto para los caracteres:
+Nuestra misión es definir la máquina de estado finito (FSM) para un subconjunto del código morse, por simplificar la implementación.
+En concreto debemos definirla, y posteriormente implementarla para los caracteres:
 \begin{itemize}
-    \item `A'
-    \item `J'
-    \item `S'
-    \item `O'
-    \item `2'
+    \item `A' (\punto\raya)
+    \item `J' (\punto\raya\raya\raya)
+    \item `S' (\punto\punto\punto)
+    \item `O' (\raya\raya\raya)
+    \item `2' (\punto\punto\raya\raya\raya)
 \end{itemize} 
 
+Además, se detalla cómo utilizar el LCD de la placa que vamos a utilizar en la segunda fase de este mismo trabajo para implementar este dispositivo morse,
+la placa FRDM-KL46Z.
+
+\section{Detalles acerca del Código Morse}
+\begin{itemize}
+    \item La unidad de tiempo no está definida, así que le llamaremos ``tick''
+    \item Los puntos (\punto) duran 1 tick
+    \item Las rayas (\raya) duran 3 ticks
+    \item El espacio intra-carácter es de 1 tick
+    \item El espacio inter-carácter es de 3 ticks
+    \item El espacio inter-palabra es de 7 ticks
+\end{itemize}
+
+
+\section{Máquina de Estado Finito}
+Para la implementación de esta FSM consideramos estados con tres posibles entradas:
+\begin{itemize}
+    \item Vacío ($\emptyset$): El usuario no pulsa el botón
+    \item Punto (\punto): El usuario pulsa el botón durante 1 tick
+    \item Raya (\raya): El usuario pulsa el botón durante 3 ticks
+\end{itemize}
+
+Cuando el usuario presiona el botón (SW1) para introducir un punto, el LED verde se enciende durante 1 tick, y cuando se pulsa el de la raya (SW2), durante 3 ticks.
+Tras esto, se espera un tick, a no ser que estemos en un nodo terminal (en el que se escribe un carácter), en cuyo caso se espera tres ticks, y se enciende el led rojo.
+
+Esto podría añadirlo a la FSM, pero considero que es algo sencillo de observar sin necesidad de saturar más la misma.
+
+De todos modos, podemos extender la máquina de estados con este comportamiento:
+
 \begin{center}
-\begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=2.8cm, semithick]
-  \tikzstyle{every state}=[,draw=black,text=black]
+\begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=3.2cm, semithick]
+    \tikzstyle{every state}=[draw=black,text=black]
 
-  \node[initial,state] (A)                    {$q_a$};
-  \node[state]         (B) [above right of=A] {$q_b$};
-  \node[state]         (D) [below right of=A] {$q_d$};
-  \node[state]         (C) [below right of=B] {$q_c$};
-  \node[state]         (E) [below of=D]       {$q_e$};
+    % Nodo inicial
+    \node[initial,state]        (vacio)                                     {$\frac{\emptyset}{\overset{\emptyset}{0}}$};
 
-  \path (A) edge              node {0,1,L} (B)
-            edge              node {1,1,R} (C)
-        (B) edge [loop above] node {1,1,L} (B)
-            edge              node {0,1,L} (C)
-        (C) edge              node {0,1,L} (D)
-            edge [bend left]  node {1,0,R} (E)
-        (D) edge [loop below] node {1,1,R} (D)
-            edge              node {0,1,R} (A)
-        (E) edge [bend left]  node {1,0,R} (A);
+    % Puntos y rayas
+    \node[state]                (punto)    [below right of=vacio]           {$\frac{\punto}{\overset{\punto}{\text{\textcolor{green}{\punto} + 1s}}}$};
+    \node[state]                (raya)     [above right of=vacio]           {$\frac{\raya}{\overset{\raya}{\text{\textcolor{green}{\punto} + 3s}}}$};
+    
+    % Encendemos LED rojo y LCD
+    \node[state, right=3cm, accepting]     (flush)    [right of=vacio]      {$\frac{\emptyset}{\overset{\text{\scriptsize{Muestra LCD}}}{\text{Enciende LED \textcolor{red}{\punto}}}}$};
+
+
+    \path
+        (vacio) edge                                node {\punto}           (punto)
+                edge                                node {\raya}            (raya)
+        (punto) edge [loop below]                   node {\punto}           (punto)
+                edge [bend left=10, looseness=1]    node {\raya}            (raya)
+                edge [bend right=10, looseness=1]   node {$\emptyset$}      (flush)
+        (raya)  edge [bend left=10, looseness=1]    node {\punto}           (punto)
+                edge [loop above]                   node {\raya}            (raya)
+                edge [bend left=10, looseness=1]    node {$\emptyset$}      (flush)
+
+    ;
 \end{tikzpicture}
 \end{center}
 
+Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento de $\emptyset$, \punto, o \raya, significa que dada esa entrada, se vuelve al estado inicial.
 
-%% Pruebas con referencias
-%\newpage
-%Prueba: Como dice \textcite{milibro} Android mola, y estoy usando \LaTeX.
-%Y además podemos hacer \parencite{misc-url}
+\bigskip\bigskip\bigskip % Dejando espacio y eso
+
+\begin{center}
+\begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=3.2cm, semithick]
+    \tikzstyle{every state}=[draw=black,text=black]
+
+    % Nodo inicial
+    \node[initial,state] (vacio)                              {$\frac{\emptyset}{\overset{\emptyset}{0}}$};
+
+    % Camino a A, J
+    \node[state]         (1p)     [below right of=vacio]      {$\frac{\punto}{\overset{\emptyset}{1}}$};
+    \node[state]         (1p1r)   [below left  of=1p]         {$\frac{\punto\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (1p2r)   [below left  of=1p1r]       {$\frac{\punto\raya\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (1p3r)   [below left  of=1p2r]       {$\frac{\punto\raya\raya\raya}{\overset{\emptyset}{1}}$};
+
+    % Camino a O
+    \node[state]         (1r)     [below left  of=vacio]      {$\frac{\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (2r)     [below left  of=1r]         {$\frac{\raya\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (3r)     [below left  of=2r]         {$\frac{\raya\raya\raya}{\overset{\emptyset}{1}}$};
+
+    % Camino a S, 2 desde 1p
+    \node[state]         (2p)     [below right of=1p]         {$\frac{\punto\punto}{\overset{\emptyset}{1}}$};
+    \node[state]         (3p)     [below right of=2p]         {$\frac{\punto\punto\punto}{\overset{\emptyset}{1}}$};
+    \node[state]         (2p1r)   [below left  of=2p]         {$\frac{\punto\punto\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (2p2r)   [below left  of=2p1r]       {$\frac{\punto\punto\raya\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (2p3r)   [below left  of=2p2r]       {$\frac{\punto\punto\raya\raya\raya}{\overset{\emptyset}{1}}$};
+
+    % Puntos finales
+    \node[state]         (S)      [below of=3p]               {$\frac{\text{ `S' }}{\overset{\text{S}}{2}}$};
+    \node[state]         (A)      [below left of=S]           {$\frac{\text{ `A' }}{\overset{\text{A}}{2}}$};
+    \node[state]         (J)      [below of=1p3r]             {$\frac{\text{ `J' }}{\overset{\text{J}}{2}}$};
+    \node[state]         (O)      [below of=3r]               {$\frac{\text{ `O' }}{\overset{\text{O}}{2}}$};
+    \node[state]         (2)      [below of=2p3r]             {$\frac{\text{ `2' }}{\overset{\text{2}}{2}}$};
+
+    \begin{pgfinterruptboundingbox}
+    \path
+        (vacio) edge                node {\punto}         (1p)
+                edge                node {\raya}          (1r)
+                edge [loop above]   node {$\emptyset$}    (vacio)
+        (1p)    edge                node {\raya}          (1p1r)
+                edge                node {\punto}         (2p)
+        (1p1r)  edge                node {\raya}          (1p2r)
+                edge [bend right=5] node {$\emptyset$}    (A)
+        (1p2r)  edge                node {\raya}          (1p3r)
+        (1p3r)  edge                node {$\emptyset$}    (J)
+        (2p)    edge                node {\punto}         (3p)
+                edge                node {\raya}          (2p1r)
+        (3p)    edge                node {$\emptyset$}    (S)
+        (2p1r)  edge                node {\raya}          (2p2r)
+        (2p2r)  edge                node {\raya}          (2p3r)
+        (2p3r)  edge                node {$\emptyset$}    (2)
+
+        (1r)    edge                node {\raya}          (2r)
+        (2r)    edge                node {\raya}          (3r)
+        (3r)    edge                node {$\emptyset$}    (O)
+
+        % Los de vuelta
+        (A)    edge [bend left=240, looseness=1.5,in=250]          node {}                (vacio)
+        (J)    edge [bend right=240,looseness=1.5,in=100]         node {}                (vacio)
+        (S)    edge [bend left=240, looseness=1,  in=250]          node {}                (vacio)
+        (O)    edge [bend right=240,looseness=1,  in=100]         node {}                (vacio)
+        (2)    edge [bend right=240,looseness=1.75,  in=100]       node {}                (vacio)
+    ;
+    \end{pgfinterruptboundingbox}
+\end{tikzpicture}
+\end{center}
+
+\bigskip\bigskip\bigskip
+
+\section{Comportamiento del LCD}
+Lorem ipsum
+
+
 \printbibliography[]{}
 \end{document}
