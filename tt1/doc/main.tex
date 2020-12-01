@@ -1,0 +1,103 @@
+\documentclass[a4paper,openright,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx} 
+\usepackage{subfigure}
+\usepackage[mathscr]{eucal}
+\usepackage{titling}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{afterpage}
+\usepackage{vmargin}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{csquotes}
+\usepackage{eurosym} 
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{url}
+\usepackage[T1]{fontenc}
+\usepackage{inconsolata}
+\usepackage{amsfonts}
+\usepackage[backend=biber, style=authoryear-icomp]{biblatex}
+\usepackage[none]{hyphenat}
+\sloppy
+\usepackage[document]{ragged2e}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\setcounter{secnumdepth}{4}
+\usepackage{datetime}
+\usepackage{mfirstuc}
+\setlist[enumerate]{itemsep=0mm}
+\setlist[itemize]{itemsep=0mm}
+\addbibresource{bibliography.bib}
+
+% Packages for FSM
+\usepackage{pgf}
+\usepackage{tikz}
+\usetikzlibrary{arrows,automata}
+
+\usepackage{duckuments}
+
+\setpapersize{A4}       %  DIN A4
+\setmargins{3cm}        % margen izquierdo
+{2cm}                   % margen superior
+{15cm}                  % anchura del texto
+{22.5cm}                % altura del texto
+{10pt}                  % altura de los encabezados
+{1cm}                   % espacio entre el texto y los encabezados
+{0pt}                   % altura del pie de página
+{2cm}                   % espacio entre el texto y el pie de página
+
+\begin{document}
+
+\author {Alonso Rodríguez}
+\title {Trabajo Tutelado I}
+
+% Título
+\maketitle
+
+% Justificamos el texto
+\justifying
+
+\section{Introducción}
+En esta primera iteración de este trabajo tutelado, realizaremos una aproximación inicial al problema que como ingenieros
+tratamos de resolver.
+
+Nuestra misión es definir la máquina de estado finito (FSM) para un subconjunto del código morse, en concreto para los caracteres:
+\begin{itemize}
+    \item `A'
+    \item `J'
+    \item `S'
+    \item `O'
+    \item `2'
+\end{itemize} 
+
+\begin{center}
+\begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=2.8cm, semithick]
+  \tikzstyle{every state}=[,draw=black,text=black]
+
+  \node[initial,state] (A)                    {$q_a$};
+  \node[state]         (B) [above right of=A] {$q_b$};
+  \node[state]         (D) [below right of=A] {$q_d$};
+  \node[state]         (C) [below right of=B] {$q_c$};
+  \node[state]         (E) [below of=D]       {$q_e$};
+
+  \path (A) edge              node {0,1,L} (B)
+            edge              node {1,1,R} (C)
+        (B) edge [loop above] node {1,1,L} (B)
+            edge              node {0,1,L} (C)
+        (C) edge              node {0,1,L} (D)
+            edge [bend left]  node {1,0,R} (E)
+        (D) edge [loop below] node {1,1,R} (D)
+            edge              node {0,1,R} (A)
+        (E) edge [bend left]  node {1,0,R} (A);
+\end{tikzpicture}
+\end{center}
+
+
+%% Pruebas con referencias
+%\newpage
+%Prueba: Como dice \textcite{milibro} Android mola, y estoy usando \LaTeX.
+%Y además podemos hacer \parencite{misc-url}
+\printbibliography[]{}
+\end{document}
