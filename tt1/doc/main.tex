@@ -13,17 +13,18 @@
 \usepackage{eurosym} 
 \usepackage{multirow}
 \usepackage{xcolor}
-\usepackage{graphicx}
 \usepackage[export]{adjustbox}
 \usepackage{url}
 \usepackage[T1]{fontenc}
 \usepackage{inconsolata}
+\usepackage{listings}
+\usepackage{minted}
 \usepackage{amsfonts}
 \usepackage[backend=biber, style=authoryear-icomp]{biblatex}
 \usepackage[none]{hyphenat}
 \sloppy
 \usepackage[document]{ragged2e}
-\usepackage{enumitem}
+\usepackage[shortlabels]{enumitem}
 \usepackage{titlesec}
 \setcounter{secnumdepth}{4}
 \usepackage{datetime}
@@ -79,7 +80,7 @@ En concreto debemos definirla, y posteriormente implementarla para los caractere
     \item `2' (\punto\punto\raya\raya\raya)
 \end{itemize} 
 
-Además, se detalla cómo utilizar el LCD de la placa que vamos a utilizar en la segunda fase de este mismo trabajo para implementar este dispositivo morse,
+Además, se detalla cómo utilizar el LCD del dispositivo que vamos a emplear en la segunda fase de este mismo trabajo para implementar este dispositivo morse:
 la placa FRDM-KL46Z.
 
 \section{Detalles acerca del Código Morse}
@@ -139,8 +140,10 @@ De todos modos, podemos extender la máquina de estados con este comportamiento,
 
 Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento de $\emptyset$, \punto, o \raya, significa que dada esa entrada, se vuelve al estado inicial.
 
-\bigskip\bigskip\bigskip % Dejando espacio y eso
+\clearpage
 
+\subsection{Diagrama general de la FSM}
+\bigskip\bigskip\bigskip % Dejamos espacio por el pgfinterruptboundingbox que hace que las flechas se nos metan en medio del título de la subsección
 \begin{center}
 \begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=3.2cm, semithick]
     \tikzstyle{every state}=[draw=black,text=black]
@@ -206,10 +209,99 @@ Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento d
 \end{tikzpicture}
 \end{center}
 
-\bigskip\bigskip\bigskip
+\bigskip
+Aquí nos damos cuenta de que siempre vamos a saber qué letra hemos pulsado inequívocamente excepto en la A, cuyo código consiste en comenzar a teclear la J, pero interrumpir
+el proceso en el segundo nodo. (\punto\raya)
+
+En este caso, lo que haremos será dar un cierto margen, y, a la espera de posibles complicaciones durante la implementación, de momento voy a atreverme a avanzar que en
+estos casos, para compensar la imprecisión humana, se contarán hasta los tres ticks para determinar que se ha terminado de introducir una letra.
+Es decir, que si desde que he pulsado \punto\raya \space han transcurrido 1.5 tick, sigo estando a tiempo de pulsar otra \raya. Pero en el momento que pasen 3 tick,
+ya se dará por hecho que se ha terminado. En este sentido, el diagrama no refleja TAN fielmente la realidad, pero pienso que esta es la forma más adecuada para representar
+esta máquina de estado finito, y a la vez contemplar que los seres humanos no somos máquinas perfectas.
+
+Queda por detallar cómo vamos a determinar la duración de los ticks. Se plantean dos opciones que se detallarán en el siguiente entregable.
+Destacar que a mi me gustaría optar por la segunda:
+
+\begin{itemize}
+    \item 1 tick = 1 segundo, 0.5 segundos, o una medida arbitraria fija.
+    \item 1 tick = media de las duraciones en segundos por espacio anteriores.
+\end{itemize}
+
+Es decir, que si de media yo hago un espacio de 0.25s entre símbolos, si hago una pausa > 0.75s, significará que el señalizado del carácter ha concluido, y por tanto debe
+encenderse el LED rojo y mostrarse el carácter correspondiente en el LCD.
 
 \section{Comportamiento del LCD}
-Lorem ipsum
+En el programa de ejemplo `StopWatch' que se nos provee, podemos observar la forma en la que se maneja el LCD de nuestra placa:
+
+\subsection{Inicialización}
+Para esto contamos con `slcdInitialize'.
+
+Para inicializarlo, tenemos que habilitarle la señal de reloj para los puertos B, C, D, E, y al propio módulo sLCD.
+
+Tras ello configuramos los pines, y configuramos el registro del sLCD \texttt{(LCD->GCR)}.
+
+Posteriormente continuamos configurando más parámetros, que no voy a tratar uno por uno, pero que con ellos sacamos en conclusión que el LCD es un periférico más, que por
+supuesto es más complejo de usar que un único LED, pero que al final del día, tiene un funcionamiento similar, es decir, tenemos que activarle señales de reloj, configurar
+sus pines y su(s) registro(s), etc.
+
+\subsection{Impresión de Caracteres}
+La función más interesante (y que probablemente más vamos a usar) en slcd.c es `slcdSet', puesto que es la que hace el trabajo por nosotros de qué mostrar en que sitio,
+que número, y lo hace de forma muy sencilla.
+
+Para los que estamos acostumbrados a programar sistemas como Arduino o similares, es un comportamiento muy parecido: En Arduino escribíamos directamente el número en binario,
+como por ejemplo 0b01111111 para el número 8. Aquí tenemos unos \#define, cada uno activando un bit.
+
+Así, podemos hacer las cosas un poco más ``elegantes'' usando bitwise-or. Por ejemplo, el 8 sería:
+
+\begin{minted}{c}
+LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_G | LCD_S_E |
+                                           LCD_S_D | LCD_S_F);
+LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_B | LCD_S_C);
+\end{minted}
+donde hacemos un or de cada uno de los bits que encienden un segmento.
+
+\subsubsection{Detalles del panel LCD}
+Además, el módulo sLCD con el que contamos tiene una particularidad, y es que cada dígito está dividido en dos subsegmentos, FP0 y FP1, tal que
+
+\begin{samepage}
+\begin{verbatim}
+        FP0 - Front Plane 0             FP1 - Front Plane 1
+        f |_g                           a_
+        e |_                              | b
+            d                           c |. dot
+\end{verbatim}
+\end{samepage}
+por lo que tenemos que poner los flags en el sitio correcto, \texttt{((2*digit)-2)} para FP0, y \texttt{((2*digit)-1)} para FP1.
+
+\subsection{Otras funciones}
+Finalmente, contamos con tres funciones autodescriptivas, que son:
+\begin{enumerate}[a]
+    \item slcdDisplay   \label{otras_func_slcdDisplay}
+    \item slcdClear     \label{otras_func_slcdClear}
+    \item slcdDemo      \label{otras_func_slcdDemo}
+\end{enumerate}
+
+
+`slcdDisplay' (\ref{otras_func_slcdDisplay}), nos muestra el número de 16 bits `value' en el formato deseado (esto segundo aún no está implementado).
+
+`slcdClear' (\ref{otras_func_slcdClear}), que hace lo que su nombre indica, borrar el display.
+
+`slcdDemo' (\ref{otras_func_slcdDemo}), que es el que se ejecuta en el programa StopWatch, y que muestra cada uno de los números en hexadecimal en la pantalla uno
+despues de otro, de forma circular, limpiando la pantalla tras escribir cada uno de ellos.
+
+Se ve muy claramente en el código:
+\begin{minted}{c}
+    for(i=0; i < 0x10; i++){
+        slcdClear();
+        slcdSet(i, i%4 + 1);
+        msDelay(300);
+        slcdClear();
+    }   
+\end{minted}
+
+También he tenido que corregir el código de `slcdSet', y `slcdErr', ya que los números 1, 2 y 3 no estaban programados,
+y 0xB estaba con las regiones del dígito intercambiadas, y falta por implementar una parte de `slcdDisplay'; puntos que trataremos en la
+segunda entrega de este trabajo tutelado.
 
 
 \printbibliography[]{}

@@ -6,15 +6,18 @@
 
 .DEFAULT_GOAL := default
 
+FLAGS = --shell-escape
+
 default: release
 
 release: dirty
 	biber main
-	pdflatex main
+	pdflatex $(FLAGS) main
 
 dirty: Makefile
-	pdflatex main
+	pdflatex $(FLAGS) main
 
 c: clean
 clean:
 	rm -f *.aux *.bbl *.bcf *.blg *.log *.pdf *.xml *.toc
+	rm -rf ./_minted-main
