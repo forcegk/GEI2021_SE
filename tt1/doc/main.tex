@@ -121,7 +121,10 @@ De todos modos, podemos extender la máquina de estados con este comportamiento,
     \node[state]                (raya)     [above right of=vacio]           {$\frac{\raya}{\overset{\raya}{\text{\textcolor{green}{\punto} + 3tick}}}$};
     
     % Encendemos LED rojo y LCD
-    \node[state, right=3cm, accepting]     (flush)    [right of=vacio]      {$\frac{\emptyset}{\overset{\text{\scriptsize{Muestra LCD}}}{\text{Enciende LED \textcolor{red}{\punto}}}}$};
+    \node[state, right=7cm, accepting]     (flush)    [right of=vacio]      {$\frac{\emptyset}{\overset{\text{\scriptsize{Muestra LCD}}}{\text{Enciende LED \textcolor{red}{\punto}}}}$};
+
+    % Esperamos 3 segundos
+    \node[state, right=2.5cm]              (hold)     [right of=vacio]      {$\frac{\emptyset}{\overset{\emptyset}{\text{máx 3tick}}}$};
 
 
     \path
@@ -129,10 +132,13 @@ De todos modos, podemos extender la máquina de estados con este comportamiento,
                 edge                                node {\raya}            (raya)
         (punto) edge [loop below]                   node {\punto}           (punto)
                 edge [bend left=10, looseness=1]    node {\raya}            (raya)
-                edge [bend right=10, looseness=1]   node {$\emptyset$}      (flush)
+                edge [bend right=12, looseness=1]   node {$\emptyset$}      (hold)
         (raya)  edge [bend left=10, looseness=1]    node {\punto}           (punto)
                 edge [loop above]                   node {\raya}            (raya)
-                edge [bend left=10, looseness=1]    node {$\emptyset$}      (flush)
+                edge [bend left=12, looseness=1]    node {$\emptyset$}      (hold)
+        (hold)  edge [bend right=12, looseness=1]   node {\punto}           (punto)
+                edge [bend left=12, looseness=1]    node {\raya}            (raya)
+                edge                                node {$\emptyset$}      (flush)
 
     ;
 \end{tikzpicture}
