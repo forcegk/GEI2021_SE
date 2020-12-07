@@ -5,6 +5,9 @@
  *----------------------------------------------------------------------------*/
 
 #include "helper.h"
+#include "slcd.h"
+
+#define _PARTE_OPCIONAL_
 
 // -----------------------------------------------------------------------------
 // Variables globales
@@ -36,6 +39,14 @@ int main (void) {
 	initSwitch1(sw1_pressed);
 	initSwitch3(sw2_pressed);
 	
+	#ifdef _PARTE_OPCIONAL_
+	slcdInitialize();
+	slcdSet(1, 1);
+	slcdSet(2, 3);
+	slcdEnableDot(1);
+	slcdEnableDot(3);
+	#endif
+	
 
 	// Bucle principal de ejecucion
 	while(1) {
@@ -46,6 +57,14 @@ int main (void) {
 			setLedG(1);
 			setLedR(0);
 		}
+		
+		#ifdef _PARTE_OPCIONAL_
+		if(sw1) slcdSet(0, 2);
+		else		slcdSet(0xc, 2);
+		
+		if(sw2) slcdSet(0, 4);
+		else		slcdSet(0xc, 4);
+		#endif
 	}
 	
 }
