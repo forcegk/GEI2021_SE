@@ -1,0 +1,16 @@
+*.uvgui.*
+*.uvgui
+*.uvopt
+*.htm
+*.d
+*.lst
+*.o
+*.axf
+*.lnp
+*.map
+*.dep
+*.bak
+*.ini
+Obj/
+Lst/
+Flash/
