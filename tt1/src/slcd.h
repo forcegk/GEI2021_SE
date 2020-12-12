@@ -50,4 +50,8 @@ void slcdDisplay(uint16_t value,uint16_t format);
 void slcdClear(void);
 void slcdDemo(void);
 
+/* Student-added */
+void slcdEnableDot(uint8_t digit);
+
+
 #endif

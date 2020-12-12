@@ -239,3 +239,14 @@ void slcdDemo(void){
 		slcdClear();
 	}
 }
+
+/*----------------------------------------------------------------------------
+	Student-added function:
+	Enable dot at digit position
+ *----------------------------------------------------------------------------*/
+void slcdEnableDot(uint8_t digit){	
+	if(digit>4 || digit<1){ 
+		slcdErr(1);
+	}
+	LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] |= LCD_S_DEC; /* Enable decimal dot */
+}
