@@ -250,3 +250,37 @@ void slcdEnableDot(uint8_t digit){
 	}
 	LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] |= LCD_S_DEC; /* Enable decimal dot */
 }
+
+
+void slcdSetChar(char c, uint8_t digit){
+
+	switch(c){
+		case 'O':
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_D | LCD_S_E | LCD_S_F);
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_B | LCD_S_C);
+			break;
+		case '2':
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_G | LCD_S_E | LCD_S_D );
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_B);
+			break;
+		case 'S':
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_G | LCD_S_F | LCD_S_D);
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_C);
+			break;
+		case 'J':
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_E | LCD_S_D);
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_B | LCD_S_C);
+			break;
+		case 'A':
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_F | LCD_S_E | LCD_S_G);
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_B | LCD_S_C);
+			break;
+		default:   //as default display 'r'
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_E | LCD_S_G);
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_C);
+			break;
+	}
+	if(digit>4){ 
+		slcdErr(1);
+	}
+}

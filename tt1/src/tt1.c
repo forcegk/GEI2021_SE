@@ -47,14 +47,21 @@
 // -----------------------------------------------------------------------------
 
 typedef const struct _state {
-	uint8_t output;
-	uint8_t time;
-	/*{no_input, dot, line}*/
+	const uint8_t output;	// Estructura bit-wise: tzyx dcba
+												//		a: LED verde (1=on, 0=off)
+												//    b: LED rojo encendido ('')
+	const uint8_t led_time;  		// Tiempo en ms / 100 de encendido del LED (es decir, poner un 1 aquí hace esperar 100ms)
+	const uint8_t delay_time;		// Idem pero para el retardo despues del encendido del LED
+	
+	const char character;
+	
+	/* {no_input, dot, line} */
 	const struct _state *next[3];
 } state;
 
 
 #define s0		&fsm[0]
+
 #define s1r		&fsm[1]
 #define s2r		&fsm[2]
 #define s3r		&fsm[3]
@@ -77,30 +84,66 @@ typedef const struct _state {
 #define fsA		&fsm[16]
 #define fsS		&fsm[17]
 
+#define LED_GREEN U4L(0001)
+#define LED_RED U4L(0010)
+
 
 state fsm[] = {
-	{U4L(0000), 100, {s0, s1r, s1p}}/*,
-	{},
-	{},
-	{},
-	{},
-	{},
-	{},
-	{},
-	{},
-	{},*/
+	{0, 0, 0, 0, {s0, s1p, s1r}},										// s0
+	
+	{LED_GREEN, 30, 10, 0, {s0, s0, s2r}},					// s1r
+	{LED_GREEN, 30, 10, 0, {s0, s0, s3r}},					// s2r
+	{LED_GREEN, 30, 10, 0, {fsO, s0, s0}},					// s3r
+	
+	{LED_GREEN, 10, 10, 0, {s0, s2p, s1p1r}},				// s1p
+	{LED_GREEN, 30, 10, 0, {fsA, s0, s1p2r}},				// s1p1r
+	{LED_GREEN, 30, 10, 0, {s0, s0, s1p3r}},				// s1p2r
+	{LED_GREEN, 30, 10, 0, {fsJ, s0, s0}},					// s1p3r
+	
+	{LED_GREEN, 10, 10, 0, {s0, s3p, s2p1r}},				// s2p
+	{LED_GREEN, 30, 10, 0, {s0, s0, s2p2r}},				// s2p1r
+	{LED_GREEN, 30, 10, 0, {s0, s0, s2p3r}},				// s2p2r
+	{LED_GREEN, 30, 10, 0, {fs2, s0, s0}},					// s2p3r
+	
+	{LED_GREEN, 10, 10, 0, {fsS, s0, s0}},					// s3p
+	
+	{LED_RED, 30, 0, 'O', {s0, s0, s0}},						// fsO
+	{LED_RED, 30, 0, 'J', {s0, s0, s0}},						// fsJ
+	{LED_RED, 30, 0, '2', {s0, s0, s0}},						// fs2
+	{LED_RED, 30, 0, 'A', {s0, s0, s0}},						// fsA
+	{LED_RED, 30, 0, 'S', {s0, s0, s0}}							// fsS
 };
 
 // -----------------------------------------------------------------------------
 // Variables globales
 // -----------------------------------------------------------------------------
 
-volatile int sw1 = 0, sw2 = U8(0000,0000);
+volatile uint8_t sw1 = 0, sw2 = 0;
+
 
 // -----------------------------------------------------------------------------
 // Rutinas de interrupción
 // -----------------------------------------------------------------------------
 
+void sw1_pressed(){
+	sw1 = 1;
+}
+
+void sw2_pressed(){
+	sw2 = 1;
+}
+
+
+// -----------------------------------------------------------------------------
+// Funciones auxiliares
+// -----------------------------------------------------------------------------
+
+void ms_switch_conditionated_delay(unsigned int delay) {
+  unsigned long long initTicks = msClock();
+  while(msClock() - initTicks < delay){
+		if(sw1 || sw2) return;
+	};
+}
 
 
 // -----------------------------------------------------------------------------
@@ -109,36 +152,47 @@ volatile int sw1 = 0, sw2 = U8(0000,0000);
 
 int main (void) {
 	
+	// Poner el estado inicial de la fsm
+	state * fsm_state = s0;
+	
 	// Inicializar rutinas de interrupción
-	//initSwitch1(sw1_pressed);
-	//initSwitch3(sw2_pressed);
+	initSwitch1(sw1_pressed);
+	initSwitch3(sw2_pressed);
 	
-	#ifdef _PARTE_OPCIONAL_
+	// Inicializar el LCD
 	slcdInitialize();
-	slcdSet(1, 1);
-	slcdSet(2, 3);
-	slcdEnableDot(1);
-	slcdEnableDot(3);
-	#endif
-	
 
 	// Bucle principal de ejecucion
 	while(1) {
-		if(sw1 || sw2){
-			setLedG(0);
-			setLedR(1);
-		}else{
-			setLedG(1);
-			setLedR(0);
+		
+		setLedG(fsm_state->output & LED_GREEN);
+		setLedR(fsm_state->output & LED_RED);	
+		
+		if(fsm_state->character){
+			// Por el momento mostramos los dos ultimos caracteres
+			slcdSetChar(fsm_state->character, 1);
 		}
 		
-		#ifdef _PARTE_OPCIONAL_
-		if(sw1) slcdSet(0, 2);
-		else		slcdSet(0xc, 2);
+		// Al finalizar todo hacemos el delay correspondiente
+		msDelay(100 * (int) fsm_state->led_time);
 		
-		if(sw2) slcdSet(0, 4);
-		else		slcdSet(0xc, 4);
-		#endif
+		setLedG(0);
+		setLedR(0);
+		
+		// Y esperamos a la entrada
+		msDelay(100 * (int) fsm_state->delay_time);
+		
+		if(sw1){
+			fsm_state = fsm_state->next[1];
+		}else if(sw2){
+			fsm_state = fsm_state->next[2];
+		}else{
+			fsm_state = fsm_state->next[0];
+		}
+		
+		sw1 = 0;
+		sw2 = 0;
+		
 	}
 	
 }

@@ -51,7 +51,8 @@ void slcdClear(void);
 void slcdDemo(void);
 
 /* Student-added */
-void slcdEnableDot(uint8_t digit);
+void slcdEnableDot(uint8_t);
+void slcdSetChar(char, uint8_t);
 
 
 #endif
