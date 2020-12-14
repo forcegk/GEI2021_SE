@@ -14,13 +14,15 @@
 // -----------------------------------------------------------------------------
 
 typedef const struct _state {
-	const uint8_t output;	// Estructura bit-wise: tzyx dcba
-												//		a: LED verde (1=on, 0=off)
-												//    b: LED rojo encendido ('')
+	const uint8_t output;				// Estructura bit-wise: tzyx dcba
+															//    a: LED verde (1=on, 0=off)
+															//    b: LED rojo encendido ('')
+															// Así, si queremos encender el led verde y el rojo será 0000 0011.
+															// Pero haciendo uso de los #define superiores, podremos escribir LED_GREEN | LED_RED 
 	const uint8_t led_time;  		// Tiempo en ticks. Este valor será multiplicado por TICKLEN ms (definido arriba)
 	const uint8_t delay_time;		// Idem pero para el retardo despues del encendido del LED
 	
-	const char character;
+	const char character;				// Carácter que se mostrará en el LCD. 0 indica ausencia de carácter
 	
 	/* {no_input, dot, line} */
 	const struct _state *next[3];
@@ -52,7 +54,7 @@ typedef const struct _state {
 #define fsS		&fsm[17]
 
 #define LED_GREEN 0x1
-#define LED_RED 0x1<<1
+#define LED_RED   0x1<<1
 
 
 state fsm[] = {

@@ -1,6 +1,6 @@
 \documentclass[a4paper,openright,12pt]{article}
 \usepackage[utf8]{inputenc}
-\usepackage{graphicx} 
+\usepackage{graphicx}
 \usepackage{subfigure}
 \usepackage[mathscr]{eucal}
 \usepackage{titling}
@@ -110,7 +110,11 @@ Asimismo las salidas están denotadas en el formato \texttt{[\text{\textcolor{gr
 La ausencia de salidas se indica con el símbolo $\emptyset$.
 \bigskip
 
-El delay se expresa en ticks (\ref{ticklen_duration}).
+El delay se expresa en ticks (\ref{ticklen_duration}) tal que:
+\begin{itemize}
+    \item lt: indica el tiempo en ticks que debe estar encendido el LED.
+    \item dt: indica el tiempo en ticks que deben estar apagados los LEDs.
+\end{itemize}
 \bigskip
 
 Además, como se detalla en \ref{design_button_translation}, \punto \space significa pulsar SW1, y \raya \space SW2.
@@ -194,7 +198,7 @@ Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento d
 \clearpage
 \section{Especificación}
 \subsection{Interfaz con el sistema}\label{design_button_translation}
-Como se especifica en el enunciado de la práctica, se ha programado el sistema de tal forma que SW1 introduce puntos (\punto) y SW2 rayas (\raya).
+Como se especifica en el enunciado de la práctica, se ha programado el sistema de tal forma que SW1 introduce puntos (\punto) y SW2 rayas (\raya), y el método de lectura se detalla en \ref{reading_method}
 
 \subsection{Flujo del programa}
 El flujo del programa consiste en, primeramente la inicialización de todos los parámetros, irq handlers, y variables necesarias, y prosigue con la entrada al bucle infinito que sigue la FSM:
@@ -263,30 +267,73 @@ Podemos apreciar que en caso de temporizar perfectamente para tener las dos vari
 indeseado o no definido, y permitiendo (a pesar de que sería necesario añadir unos márgenes para poder realizarlo consistentemente) realizar alguna acción especial al pulsar ambos
 botones simultáneamente.
 
+\subsection{Detalles de Implementación}
+\subsubsection{Estado}
+\begin{minted}{c}
+typedef const struct _state {
+    const uint8_t output;      // Estructura bit-wise: tzyx dcba
+                               //    a: LED verde (1=on, 0=off)
+                               //    b: LED rojo encendido ('')
+                               // Así, si queremos encender el led verde y
+                               //  el rojo será 0000 0011.
+                               // Pero haciendo uso de los #define superiores,
+                               //  podremos escribir LED_GREEN | LED_RED 
 
-Aquí nos damos cuenta de que siempre vamos a saber qué letra hemos pulsado inequívocamente excepto en la A, cuyo código consiste en comenzar a teclear la J, pero interrumpir
-el proceso en el segundo nodo. (\punto\raya)
+    const uint8_t led_time;    // Tiempo en ticks. Este valor será multiplicado
+                               //  por TICKLEN ms (definido arriba)
 
-En este caso, lo que haremos será dar un cierto margen, y, a la espera de posibles complicaciones durante la implementación, de momento voy a atreverme a avanzar que en
-estos casos, para compensar la imprecisión humana, se contarán hasta los tres ticks para determinar que se ha terminado de introducir una letra.
-Es decir, que si desde que he pulsado \punto\raya \space han transcurrido 1.5 tick, sigo estando a tiempo de pulsar otra \raya. Pero en el momento que pasen 3 tick,
-ya se dará por hecho que se ha terminado. En este sentido, el diagrama no refleja TAN fielmente la realidad, pero pienso que esta es la forma más adecuada para representar
-esta máquina de estado finito, y a la vez contemplar que los seres humanos no somos máquinas perfectas.
+    const uint8_t delay_time;  // Idem pero para el retardo despues del encendido
+                               //  del LED
+    
+    const char character;      // Carácter que se mostrará en el LCD. 0 indica
+                               //  ausencia de carácter
+    
+    /* {no_input, dot, line} */
+    const struct _state *next[3];
+} state;
+\end{minted}
 
-Queda por detallar cómo vamos a determinar la duración de los ticks. Se plantean dos opciones que se detallarán en el siguiente entregable.
-Destacar que a mi me gustaría optar por la segunda:
-
+Por si el código no fuese lo suficientemente autodescriptivo, contamos con cuatro constantes dentro de cada estado, que nos definen los valores de:
 \begin{itemize}
-    \item 1 tick = 1 segundo, 0.5 segundos, o una medida arbitraria fija.
-    \item 1 tick = media de las duraciones en segundos por espacio anteriores.
+    \item \texttt{output} - 8 bits que nos indican si se debe encender el led verde o rojo.
+    \item \texttt{led\_time} - Nos indica el tiempo en tick que debe permanecer encendido el LED.
+    \item \texttt{delay\_time} - Nos indica el tiempo que debe permanecer el LED apagado.
+    \item \texttt{character} - Es un char (tambien un entero de 8 bits al fin y al cabo) que indica la salida por LCD.
+    \item \texttt{*next[]} - Almacena las referencias a los siguientes estados, en concreto: \begin{enumerate}
+        \item \texttt{no\_input [0]}: Apunta al estado al que se transiciona en caso de no recibir input antes de \texttt{delay\_time}.
+        \item \texttt{dot [1]}: Apunta al estado al que se transiciona en caso de recibir un punto antes de \texttt{delay\_time}.
+        \item \texttt{line [2]}: Apunta al estado al que se transiciona en caso de recibir una raya antes de \texttt{delay\_time}.
+    \end{enumerate}
 \end{itemize}
 
-Es decir, que si de media yo hago un espacio de 0.25s entre símbolos, si hago una pausa > 0.75s, significará que el señalizado del carácter ha concluido, y por tanto debe
-encenderse el LED rojo y mostrarse el carácter correspondiente en el LCD.
+
+\subsubsection{Máquina de estados}
+Se ha implementado la máquina de estado finito como un array de estados, y como se indica en las transparencias de teoría, se ha establecido un `alias' a cada estado
+mediante \texttt{\#defines}, tal que:
+\begin{minted}{c}
+    #define s0        &fsm[0]
+    // [...]
+    #define s1r       &fsm[1]
+    // [...]
+    #define fsO       &fsm[13]
+
+    #define LED_GREEN 0x1
+    #define LED_RED   0x1<<1
+
+    state fsm[] = {
+        {0, 0, 0, 0, {s0, s1p, s1r}},               // s0
+        // [...]
+        {LED_GREEN, 3, 1, 0, {s0, s0, s2r}},        // s1r
+        // [...]
+        {LED_RED, 3, 0, 'O', {s0, s0, s0}},         // fsO
+    };
+\end{minted}
 
 
-
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                          LCD                                                          %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
 \section{Comportamiento del LCD}
 En el programa de ejemplo `StopWatch' que se nos provee, podemos observar la forma en la que se maneja el LCD de nuestra placa:
 
@@ -330,8 +377,32 @@ Además, el módulo sLCD con el que contamos tiene una particularidad, y es que 
 \end{samepage}
 por lo que tenemos que poner los flags en el sitio correcto, \texttt{((2*digit)-2)} para FP0, y \texttt{((2*digit)-1)} para FP1.
 
-\subsection{Otras funciones}
-Finalmente, contamos con tres funciones autodescriptivas, que son:
+Esta forma de acceder a los segmentos nos indica que estamos ante un LCD con dígitos multiplexados en dos vías, la primera siendo el FP0, y la segunda FP1. \autocite[430]{zhu2018embedded}
+
+Es decir, que los sectores (d,e,f,g) $\in$ FP0 están conectados a una misma tierra, así como (a,b,c,dot) $\in$ FP1. Podemos concluir por esto que contamos con
+un \emph{Duty Ratio} de $\frac{1}{2}$.
+
+Sabiendo esto, si realizamos ingeniería inversa a \texttt{slcd.h}, podemos ver lo siguiente:
+\begin{minted}{c}
+#define LCD_S_D 0x11
+#define LCD_S_E 0x22
+#define LCD_S_G 0x44
+#define LCD_S_F 0x88
+
+#define LCD_S_DEC 0x11
+#define LCD_S_C 0x22
+#define LCD_S_B 0x44
+#define LCD_S_A 0x88
+\end{minted}
+
+Y podemos dibujar el circuito que implementa el LCD de nuestra placa, en el que (d,dec), (e,c), (g,b), (f,a) son los segmentos que están conectados a las líneas de
+tensión que nosotros activamos o desactivamos desde el control del programa.
+\begin{center}
+\includegraphics[scale=0.5]{img/digits.png}
+\end{center}
+
+\subsection{Funciones}
+Contamos con tres funciones autodescriptivas, que son:
 \begin{enumerate}[a]
     \item slcdDisplay   \label{otras_func_slcdDisplay}
     \item slcdClear     \label{otras_func_slcdClear}
@@ -357,8 +428,23 @@ Se ve muy claramente en el código:
 \end{minted}
 
 También he tenido que corregir el código de `slcdSet', y `slcdErr', ya que los números 1, 2 y 3 no estaban programados,
-y 0xB estaba con las regiones del dígito intercambiadas, y falta por implementar una parte de `slcdDisplay'; puntos que trataremos en la
-segunda entrega de este trabajo tutelado.
+y 0xB estaba con las regiones del dígito intercambiadas, y falta por implementar una parte de `slcdDisplay', que no es necesario completar ya que no se usa.
+
+\subsection{Funciones nuevas}
+Se ha implementado una nueva función que muestra los caracteres alfanuméricos en el LCD:
+\begin{minted}{c}
+    void slcdSetChar(char c, uint8_t digit)
+\end{minted}
+
+Donde \texttt{digit} es la posición de izquierda a derecha [1..4] en el LCD del carácter a imprimir, y que soporta como entradas para \texttt{c}:
+\begin{itemize}
+    \item `O'
+    \item `2'
+    \item `S'
+    \item `J'
+    \item `A'
+\end{itemize}
+
 
 
 \printbibliography[]{}
