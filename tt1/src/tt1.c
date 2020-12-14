@@ -129,6 +129,8 @@ int main (void) {
 		if(fsm_state->character){
 			// Por el momento mostramos los dos ultimos caracteres
 			slcdSetChar(fsm_state->character, 1);
+		}else{
+			slcdClear();
 		}
 		
 		// Al finalizar todo hacemos el delay correspondiente

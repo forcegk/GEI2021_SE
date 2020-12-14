@@ -20,7 +20,7 @@
 \usepackage{listings}
 \usepackage{minted}
 \usepackage{amsfonts}
-\usepackage[backend=biber, style=authoryear-icomp]{biblatex}
+\usepackage[backend=biber, style=apa, autocite=inline]{biblatex}
 \usepackage[none]{hyphenat}
 \sloppy
 \usepackage[document]{ragged2e}
@@ -67,7 +67,7 @@
 \justifying{}
 
 \section{Introducción}
-El objetivo de esta práctica es implementar un codificador de código morse mediante el uso de una Máquina de Estado Finito (FSM).
+El objetivo de esta práctica es implementar un codificador morse mediante el uso de una Máquina de Estado Finito (FSM).
 Para simplificar la implementación, trabajaremos sobre un subconjunto de este código, en concreto para los caracteres:
 \begin{itemize}
     \item `A' (\punto\raya)
@@ -202,6 +202,7 @@ Como se especifica en el enunciado de la práctica, se ha programado el sistema 
 
 \subsection{Flujo del programa}
 El flujo del programa consiste en, primeramente la inicialización de todos los parámetros, irq handlers, y variables necesarias, y prosigue con la entrada al bucle infinito que sigue la FSM:
+\begin{samepage}    
 \begin{minted}{c}
     while(1) {
         set_output(state.output)
@@ -215,6 +216,7 @@ El flujo del programa consiste en, primeramente la inicialización de todos los 
             state = state.next_state[n]
     }
 \end{minted}
+\end{samepage}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -240,10 +242,9 @@ Y así multiplicamos la propiedad que guarda cada estado en ticks, por \texttt{T
 \end{minted}
 
 \subsubsection{Corner cases}
-\begin{enumerate}
-    \item Los dos switches se presionan a la vez:
-\end{enumerate}
-En este caso se ha optado por la opción que permite mayor extensibilidad y es que debido a que la pulsación de cada switch activa una interrupción,
+En este caso solo tenemos uno y es que los dos switches se presionen a la vez:
+
+Se ha optado por la opción que permite mayor extensibilidad y es que debido a que la pulsación de cada switch activa una interrupción,
 siempre sabremos qué switch se ha pulsado.
 
 Además, debido a la alta velocidad de reloj del microprocesador (en comparación con los tiempos que manejamos los humanos), es altamente improbable que ambos botones coincidan
@@ -253,6 +254,7 @@ No se puede forzar esta situación manteniendo pulsados ambos switches, ya que l
 
 De todos modos, si nos fijamos atentamente en el código:
 
+\begin{samepage}
 \begin{minted}{c}
     if(sw1){
         fsm_state = fsm_state->next[1];
@@ -261,7 +263,8 @@ De todos modos, si nos fijamos atentamente en el código:
     }else{
         fsm_state = fsm_state->next[0];
     }
-\end{minted}
+\end{minted}    
+\end{samepage}
 
 Podemos apreciar que en caso de temporizar perfectamente para tener las dos variables a uno, se atendería primero la del switch 1, deshaciendo ese posible comportamiento
 indeseado o no definido, y permitiendo (a pesar de que sería necesario añadir unos márgenes para poder realizarlo consistentemente) realizar alguna acción especial al pulsar ambos
@@ -269,6 +272,7 @@ botones simultáneamente.
 
 \subsection{Detalles de Implementación}
 \subsubsection{Estado}
+\begin{samepage}    
 \begin{minted}{c}
 typedef const struct _state {
     const uint8_t output;      // Estructura bit-wise: tzyx dcba
@@ -292,6 +296,7 @@ typedef const struct _state {
     const struct _state *next[3];
 } state;
 \end{minted}
+\end{samepage}
 
 Por si el código no fuese lo suficientemente autodescriptivo, contamos con cuatro constantes dentro de cada estado, que nos definen los valores de:
 \begin{itemize}
@@ -310,6 +315,7 @@ Por si el código no fuese lo suficientemente autodescriptivo, contamos con cuat
 \subsubsection{Máquina de estados}
 Se ha implementado la máquina de estado finito como un array de estados, y como se indica en las transparencias de teoría, se ha establecido un `alias' a cada estado
 mediante \texttt{\#defines}, tal que:
+\begin{samepage}    
 \begin{minted}{c}
     #define s0        &fsm[0]
     // [...]
@@ -328,6 +334,7 @@ mediante \texttt{\#defines}, tal que:
         {LED_RED, 3, 0, 'O', {s0, s0, s0}},         // fsO
     };
 \end{minted}
+\end{samepage}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -357,14 +364,19 @@ como por ejemplo 0b01111111 para el número 8. Aquí tenemos unos \#define, cada
 
 Así, podemos hacer las cosas un poco más ``elegantes'' usando bitwise-or. Por ejemplo, el 8 sería:
 
+\begin{samepage}    
 \begin{minted}{c}
 LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = (LCD_S_G | LCD_S_E |
                                            LCD_S_D | LCD_S_F);
 LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_B | LCD_S_C);
 \end{minted}
+\end{samepage}
 donde hacemos un or de cada uno de los bits que encienden un segmento.
 
-\subsubsection{Detalles del panel LCD}
+De todos modos, es perfectamente posible (y muy sencillo) el escribir una librería \texttt{ldc.h} que controle el LCD al estilo arduino, o que incluso elimine la necesidad de controlar
+los Front Planes por separado.
+
+\subsubsection{Detalles del panel LCD}\label{lcd_details}
 Además, el módulo sLCD con el que contamos tiene una particularidad, y es que cada dígito está dividido en dos subsegmentos, FP0 y FP1, tal que
 
 \begin{samepage}
@@ -375,7 +387,8 @@ Además, el módulo sLCD con el que contamos tiene una particularidad, y es que 
             d                           c |. dot
 \end{verbatim}
 \end{samepage}
-por lo que tenemos que poner los flags en el sitio correcto, \texttt{((2*digit)-2)} para FP0, y \texttt{((2*digit)-1)} para FP1.
+por lo que tenemos que poner los flags en el sitio correcto, \texttt{((2*digit)-2)} para FP0, y \texttt{((2*digit)-1)} para FP1, de lo contrario encenderemos segmentos en el grupo
+que no es (\ref{lcd_details}).
 
 Esta forma de acceder a los segmentos nos indica que estamos ante un LCD con dígitos multiplexados en dos vías, la primera siendo el FP0, y la segunda FP1. \autocite[430]{zhu2018embedded}
 
@@ -383,23 +396,34 @@ Es decir, que los sectores (d,e,f,g) $\in$ FP0 están conectados a una misma tie
 un \emph{Duty Ratio} de $\frac{1}{2}$.
 
 Sabiendo esto, si realizamos ingeniería inversa a \texttt{slcd.h}, podemos ver lo siguiente:
+\begin{samepage}    
 \begin{minted}{c}
-#define LCD_S_D 0x11
-#define LCD_S_E 0x22
-#define LCD_S_G 0x44
-#define LCD_S_F 0x88
+    #define LCD_S_D 0x11
+    #define LCD_S_E 0x22
+    #define LCD_S_G 0x44
+    #define LCD_S_F 0x88
 
-#define LCD_S_DEC 0x11
-#define LCD_S_C 0x22
-#define LCD_S_B 0x44
-#define LCD_S_A 0x88
+    #define LCD_S_DEC 0x11
+    #define LCD_S_C 0x22
+    #define LCD_S_B 0x44
+    #define LCD_S_A 0x88
 \end{minted}
+\end{samepage}
 
 Y podemos dibujar el circuito que implementa el LCD de nuestra placa, en el que (d,dec), (e,c), (g,b), (f,a) son los segmentos que están conectados a las líneas de
 tensión que nosotros activamos o desactivamos desde el control del programa.
 \begin{center}
 \includegraphics[scale=0.5]{img/digits.png}
 \end{center}
+
+Esto parece contradecir lo que encontramos en el manual, ya que describe un dígito con un \emph{duty cycle} de $\frac{1}{3}$, sin embargo, tras mirar cuidadosamente, podemos ver que
+es un ejemplo, lo cual pienso que podría llevar a confusión siendo que es el único diagrama en el datasheet. \autocite[919]{KL46manual}
+
+\subsubsection{Multiplexación}
+Para dar un poco de contexto sobre el apartado anterior, este esquema de conexionado funciona conmutando intermitentemente las dos tierras de cada uno de los grupos FP0 y FP1, lo cual
+hace que parpadeen intermitentemente. Parpadeo invisible al ojo humano pero existente, y captable por por ejemplo cámaras de altos fps.
+
+Lo interesante de esta aproximación es sin embargo que con esta inteligente jugada nos ahorramos la mitad de líneas de control, ya que para controlar 8 segmentos únicamente hemos empleado 4.
 
 \subsection{Funciones}
 Contamos con tres funciones autodescriptivas, que son:
@@ -418,6 +442,7 @@ Contamos con tres funciones autodescriptivas, que son:
 despues de otro, de forma circular, limpiando la pantalla tras escribir cada uno de ellos.
 
 Se ve muy claramente en el código:
+\begin{samepage}
 \begin{minted}{c}
     for(i=0; i < 0x10; i++){
         slcdClear();
@@ -426,6 +451,7 @@ Se ve muy claramente en el código:
         slcdClear();
     }   
 \end{minted}
+\end{samepage}
 
 También he tenido que corregir el código de `slcdSet', y `slcdErr', ya que los números 1, 2 y 3 no estaban programados,
 y 0xB estaba con las regiones del dígito intercambiadas, y falta por implementar una parte de `slcdDisplay', que no es necesario completar ya que no se usa.
@@ -446,6 +472,6 @@ Donde \texttt{digit} es la posición de izquierda a derecha [1..4] en el LCD del
 \end{itemize}
 
 
-
+\clearpage
 \printbibliography[]{}
 \end{document}
