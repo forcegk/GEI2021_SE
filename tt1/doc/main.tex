@@ -67,11 +67,8 @@
 \justifying{}
 
 \section{Introducción}
-En esta primera iteración de este trabajo tutelado, realizaremos una aproximación inicial al problema que como ingenieros
-tratamos de resolver.
-
-Nuestra misión es definir la máquina de estado finito (FSM) para un subconjunto del código morse, por simplificar la implementación.
-En concreto debemos definirla, y posteriormente implementarla para los caracteres:
+El objetivo de esta práctica es implementar un codificador de código morse mediante el uso de una Máquina de Estado Finito (FSM).
+Para simplificar la implementación, trabajaremos sobre un subconjunto de este código, en concreto para los caracteres:
 \begin{itemize}
     \item `A' (\punto\raya)
     \item `J' (\punto\raya\raya\raya)
@@ -80,12 +77,11 @@ En concreto debemos definirla, y posteriormente implementarla para los caractere
     \item `2' (\punto\punto\raya\raya\raya)
 \end{itemize} 
 
-Además, se detalla cómo utilizar el LCD del dispositivo que vamos a emplear en la segunda fase de este mismo trabajo para implementar este dispositivo morse:
-la placa FRDM-KL46Z.
+El hardware sobre el que se implementa el sistema se trata de la placa FRDM-KL46Z.
 
-\section{Detalles acerca del Código Morse}
+\subsection{Detalles acerca del Código Morse}
 \begin{itemize}
-    \item La unidad de tiempo no está definida, así que le llamaremos ``tick''
+    \item La unidad de tiempo no está definida explítamente, así que le llamaremos ``tick''
     \item Los puntos (\punto) duran 1 tick
     \item Las rayas (\raya) duran 3 ticks
     \item El espacio intra-carácter es de 1 tick
@@ -95,54 +91,30 @@ la placa FRDM-KL46Z.
 
 
 \section{Máquina de Estado Finito}
+Siguiendo la notación propuesta en las clases para cada estado, denotamos los estados por: $\frac{\text{nombre}}{\overset{\text{salida}}{\text{delay}}}$
+
 Para la implementación de esta FSM consideramos estados con tres posibles entradas:
 \begin{itemize}
-    \item Vacío ($\emptyset$): El usuario no pulsa el botón
+    \item Vacío ($\emptyset$): El usuario no pulsa el botón durante más de 1 tick
     \item Punto (\punto): El usuario pulsa el botón durante 1 tick
     \item Raya (\raya): El usuario pulsa el botón durante 3 ticks
 \end{itemize}
 
-Cuando el usuario presiona el botón (SW1) para introducir un punto, el LED verde se enciende durante 1 tick, y cuando se pulsa el de la raya (SW2), durante 3 ticks.
-Tras esto, se espera un tick, a no ser que estemos en un nodo terminal (en el que se escribe un carácter), en cuyo caso se espera tres ticks, y se enciende el led rojo.
+Asimismo las salidas están denotadas en el formato \texttt{[\text{\textcolor{green}{\punto}}\text{\textcolor{red}{\punto}} `C']}, tal que:
+\begin{itemize}
+    \item \text{\textcolor{green}{\punto}} para indicar que se enciende el LED verde.
+    \item \text{\textcolor{red}{\punto}} para indicar que se enciende el LED rojo.
+    \item `C', siendo C uno de los posibles carácteres representables en este subconjunto de morse.
+\end{itemize}
 
-Esto podría añadirlo a la FSM, pero considero que es algo sencillo de observar sin necesidad de saturar más la misma.
+La ausencia de salidas se indica con el símbolo $\emptyset$.
+\bigskip
 
-De todos modos, podemos extender la máquina de estados con este comportamiento, donde \punto \space significa pulsar SW1, y \raya \space SW2:
+El delay se expresa en ticks (\ref{ticklen_duration}).
+\bigskip
 
-\begin{center}
-\begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=3.2cm, semithick]
-    \tikzstyle{every state}=[draw=black,text=black]
-
-    % Nodo inicial
-    \node[initial,state]        (vacio)                                     {$\frac{\emptyset}{\overset{\emptyset}{0}}$};
-
-    % Puntos y rayas
-    \node[state]                (punto)    [below right of=vacio]           {$\frac{\punto}{\overset{\punto}{\text{\textcolor{green}{\punto} + 1tick}}}$};
-    \node[state]                (raya)     [above right of=vacio]           {$\frac{\raya}{\overset{\raya}{\text{\textcolor{green}{\punto} + 3tick}}}$};
-    
-    % Encendemos LED rojo y LCD
-    \node[state, right=7cm, accepting]     (flush)    [right of=vacio]      {$\frac{\emptyset}{\overset{\text{\scriptsize{Muestra LCD}}}{\text{Enciende LED \textcolor{red}{\punto}}}}$};
-
-    % Esperamos 3 segundos
-    \node[state, right=2.5cm]              (hold)     [right of=vacio]      {$\frac{\emptyset}{\overset{\emptyset}{\text{máx 3tick}}}$};
-
-
-    \path
-        (vacio) edge                                node {\punto}           (punto)
-                edge                                node {\raya}            (raya)
-        (punto) edge [loop below]                   node {\punto}           (punto)
-                edge [bend left=10, looseness=1]    node {\raya}            (raya)
-                edge [bend right=12, looseness=1]   node {$\emptyset$}      (hold)
-        (raya)  edge [bend left=10, looseness=1]    node {\punto}           (punto)
-                edge [loop above]                   node {\raya}            (raya)
-                edge [bend left=12, looseness=1]    node {$\emptyset$}      (hold)
-        (hold)  edge [bend right=12, looseness=1]   node {\punto}           (punto)
-                edge [bend left=12, looseness=1]    node {\raya}            (raya)
-                edge                                node {$\emptyset$}      (flush)
-
-    ;
-\end{tikzpicture}
-\end{center}
+Además, como se detalla en \ref{design_button_translation}, \punto \space significa pulsar SW1, y \raya \space SW2.
+\bigskip
 
 Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento de $\emptyset$, \punto, o \raya, significa que dada esa entrada, se vuelve al estado inicial.
 
@@ -155,32 +127,32 @@ Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento d
     \tikzstyle{every state}=[draw=black,text=black]
 
     % Nodo inicial
-    \node[initial,state] (vacio)                              {$\frac{\emptyset}{\overset{\emptyset}{0}}$};
+    \node[initial,state] (vacio)                              {$\frac{\text{idle}}{\overset{\emptyset}{\text{lt=1 dt=1}}}$};
 
     % Camino a A, J
-    \node[state]         (1p)     [below right of=vacio]      {$\frac{\punto}{\overset{\emptyset}{1}}$};
-    \node[state]         (1p1r)   [below left  of=1p]         {$\frac{\punto\raya}{\overset{\emptyset}{1}}$};
-    \node[state]         (1p2r)   [below left  of=1p1r]       {$\frac{\punto\raya\raya}{\overset{\emptyset}{1}}$};
-    \node[state]         (1p3r)   [below left  of=1p2r]       {$\frac{\punto\raya\raya\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (1p)     [below right of=vacio]      {$\frac{\punto}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=1 dt=1}}}$};
+    \node[state]         (1p1r)   [below left  of=1p]         {$\frac{\punto\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
+    \node[state]         (1p2r)   [below left  of=1p1r]       {$\frac{\punto\raya\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
+    \node[state]         (1p3r)   [below left  of=1p2r]       {$\frac{\punto\raya\raya\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
 
     % Camino a O
-    \node[state]         (1r)     [below left  of=vacio]      {$\frac{\raya}{\overset{\emptyset}{1}}$};
-    \node[state]         (2r)     [below left  of=1r]         {$\frac{\raya\raya}{\overset{\emptyset}{1}}$};
-    \node[state]         (3r)     [below left  of=2r]         {$\frac{\raya\raya\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (1r)     [below left  of=vacio]      {$\frac{\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
+    \node[state]         (2r)     [below left  of=1r]         {$\frac{\raya\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
+    \node[state]         (3r)     [below left  of=2r]         {$\frac{\raya\raya\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
 
     % Camino a S, 2 desde 1p
-    \node[state]         (2p)     [below right of=1p]         {$\frac{\punto\punto}{\overset{\emptyset}{1}}$};
-    \node[state]         (3p)     [below right of=2p]         {$\frac{\punto\punto\punto}{\overset{\emptyset}{1}}$};
-    \node[state]         (2p1r)   [below left  of=2p]         {$\frac{\punto\punto\raya}{\overset{\emptyset}{1}}$};
-    \node[state]         (2p2r)   [below left  of=2p1r]       {$\frac{\punto\punto\raya\raya}{\overset{\emptyset}{1}}$};
-    \node[state]         (2p3r)   [below left  of=2p2r]       {$\frac{\punto\punto\raya\raya\raya}{\overset{\emptyset}{1}}$};
+    \node[state]         (2p)     [below right of=1p]         {$\frac{\punto\punto}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=1 dt=1}}}$};
+    \node[state]         (3p)     [below right of=2p]         {$\frac{\punto\punto\punto}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=1 dt=1}}}$};
+    \node[state]         (2p1r)   [below left  of=2p]         {$\frac{\punto\punto\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
+    \node[state]         (2p2r)   [below left  of=2p1r]       {$\frac{\punto\punto\raya\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
+    \node[state]         (2p3r)   [below left  of=2p2r]       {$\frac{\punto\punto\raya\raya\raya}{\overset{\text{\textcolor{green}{\punto}}}{\text{lt=3 dt=1}}}$};
 
     % Puntos finales
-    \node[state]         (S)      [below of=3p]               {$\frac{\text{ `S' }}{\overset{\text{S}}{2}}$};
-    \node[state]         (A)      [below left of=S]           {$\frac{\text{ `A' }}{\overset{\text{A}}{2}}$};
-    \node[state]         (J)      [below of=1p3r]             {$\frac{\text{ `J' }}{\overset{\text{J}}{2}}$};
-    \node[state]         (O)      [below of=3r]               {$\frac{\text{ `O' }}{\overset{\text{O}}{2}}$};
-    \node[state]         (2)      [below of=2p3r]             {$\frac{\text{ `2' }}{\overset{\text{2}}{2}}$};
+    \node[state]         (S)      [below of=3p]               {$\frac{\text{ S }}{\overset{\text{\textcolor{red}{\punto}, `S'}}{\text{lt=3 dt=0}}}$};
+    \node[state]         (A)      [below left of=S]           {$\frac{\text{ A }}{\overset{\text{\textcolor{red}{\punto}, `A'}}{\text{lt=3 dt=0}}}$};
+    \node[state]         (J)      [below of=1p3r]             {$\frac{\text{ J }}{\overset{\text{\textcolor{red}{\punto}, `J'}}{\text{lt=3 dt=0}}}$};
+    \node[state]         (O)      [below of=3r]               {$\frac{\text{ O }}{\overset{\text{\textcolor{red}{\punto}, `O'}}{\text{lt=3 dt=0}}}$};
+    \node[state]         (2)      [below of=2p3r]             {$\frac{\text{ 2 }}{\overset{\text{\textcolor{red}{\punto}, `2'}}{\text{lt=3 dt=0}}}$};
 
     \begin{pgfinterruptboundingbox}
     \path
@@ -190,7 +162,7 @@ Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento d
         (1p)    edge                node {\raya}          (1p1r)
                 edge                node {\punto}         (2p)
         (1p1r)  edge                node {\raya}          (1p2r)
-                edge [bend right=5] node {$\emptyset$}    (A)
+                edge [bend right=7] node {$\emptyset$}    (A)
         (1p2r)  edge                node {\raya}          (1p3r)
         (1p3r)  edge                node {$\emptyset$}    (J)
         (2p)    edge                node {\punto}         (3p)
@@ -215,7 +187,83 @@ Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento d
 \end{tikzpicture}
 \end{center}
 
-\bigskip
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                    ESPECIFICACIÓN                                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\section{Especificación}
+\subsection{Interfaz con el sistema}\label{design_button_translation}
+Como se especifica en el enunciado de la práctica, se ha programado el sistema de tal forma que SW1 introduce puntos (\punto) y SW2 rayas (\raya).
+
+\subsection{Flujo del programa}
+El flujo del programa consiste en, primeramente la inicialización de todos los parámetros, irq handlers, y variables necesarias, y prosigue con la entrada al bucle infinito que sigue la FSM:
+\begin{minted}{c}
+    while(1) {
+        set_output(state.output)
+        delay(state.blinking_time)
+        clear_output()
+        delay(state.delay_time)
+        
+        if(...)
+            state = state.next_state[...]
+        else ...
+            state = state.next_state[n]
+    }
+\end{minted}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                    IMPLEMENTACIÓN                                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\section{Implementación}
+\subsection{Decisiones de diseño}
+\subsubsection{Método de lectura}\label{reading_method}
+Se ha optado por una lectura de los eventos mediante interrupciones, ya que, a pesar de que el programa no es excesivamente complejo, tampoco pienso que fuese una enorme ventaja el
+hacerlo mediante \emph{polling}, que además es posible que nos hiciese tener que lidiar con algunos corner cases extras.
+
+\subsubsection{Timing}\label{ticklen_duration}
+Como la duración de cada tick no está explícitamente definida, este se define mediante un parámetro en el código, que por decisión personal
+he establecido a 750ms:
+\begin{minted}{c}
+        #define TICKLEN 750
+\end{minted}
+
+Y así multiplicamos la propiedad que guarda cada estado en ticks, por \texttt{TICKLEN}:
+\begin{minted}{c}
+        msDelay(TICKLEN * fsm_state->led_time);
+\end{minted}
+
+\subsubsection{Corner cases}
+\begin{enumerate}
+    \item Los dos switches se presionan a la vez:
+\end{enumerate}
+En este caso se ha optado por la opción que permite mayor extensibilidad y es que debido a que la pulsación de cada switch activa una interrupción,
+siempre sabremos qué switch se ha pulsado.
+
+Además, debido a la alta velocidad de reloj del microprocesador (en comparación con los tiempos que manejamos los humanos), es altamente improbable que ambos botones coincidan
+en el mismo ciclo interno del programa, y por tanto se tratará el botón que por cuestión de microsegundos haya sido pulsado antes.
+
+No se puede forzar esta situación manteniendo pulsados ambos switches, ya que la interrupción solo se activa en el accionado del botón.
+
+De todos modos, si nos fijamos atentamente en el código:
+
+\begin{minted}{c}
+    if(sw1){
+        fsm_state = fsm_state->next[1];
+    }else if(sw2){
+        fsm_state = fsm_state->next[2];
+    }else{
+        fsm_state = fsm_state->next[0];
+    }
+\end{minted}
+
+Podemos apreciar que en caso de temporizar perfectamente para tener las dos variables a uno, se atendería primero la del switch 1, deshaciendo ese posible comportamiento
+indeseado o no definido, y permitiendo (a pesar de que sería necesario añadir unos márgenes para poder realizarlo consistentemente) realizar alguna acción especial al pulsar ambos
+botones simultáneamente.
+
+
 Aquí nos damos cuenta de que siempre vamos a saber qué letra hemos pulsado inequívocamente excepto en la A, cuyo código consiste en comenzar a teclear la J, pero interrumpir
 el proceso en el segundo nodo. (\punto\raya)
 
@@ -235,6 +283,9 @@ Destacar que a mi me gustaría optar por la segunda:
 
 Es decir, que si de media yo hago un espacio de 0.25s entre símbolos, si hago una pausa > 0.75s, significará que el señalizado del carácter ha concluido, y por tanto debe
 encenderse el LED rojo y mostrarse el carácter correspondiente en el LCD.
+
+
+
 
 \section{Comportamiento del LCD}
 En el programa de ejemplo `StopWatch' que se nos provee, podemos observar la forma en la que se maneja el LCD de nuestra placa:

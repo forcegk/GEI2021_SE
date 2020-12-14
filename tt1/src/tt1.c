@@ -7,7 +7,7 @@
 #include "helper.h"
 #include "slcd.h"
 
-#define TICKLEN 500 // ms
+#define TICKLEN 750 // ms
 
 // -----------------------------------------------------------------------------
 // Máquina de estados
@@ -56,6 +56,7 @@ typedef const struct _state {
 
 
 state fsm[] = {
+/*{output, led_time, delay_time, character, *next[]}*/
 	{0, 0, 0, 0, {s0, s1p, s1r}},										// s0
 	
 	{LED_GREEN, 3, 1, 0, {s0, s0, s2r}},						// s1r
