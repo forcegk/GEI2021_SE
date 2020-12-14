@@ -7,4 +7,5 @@
 *.xml
 *.toc
 *.out
+*.pyg
 _minted-main/

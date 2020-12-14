@@ -19,5 +19,5 @@ dirty: Makefile
 
 c: clean
 clean:
-	rm -f *.aux *.bbl *.bcf *.blg *.log *.pdf *.xml *.toc
+	rm -f *.aux *.bbl *.bcf *.blg *.log *.pdf *.xml *.toc *.pyg
 	rm -rf ./_minted-main

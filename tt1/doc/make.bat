@@ -1,5 +1,7 @@
 @echo off
 
+set "FLAGS=--shell-escape"
+
 :: Default
 if "%1"=="" goto :release
 if "%1"=="default" goto :release
@@ -10,13 +12,13 @@ if "%1"=="c" goto :clean
 goto :EOF
 
 :dirty
-pdflatex main
+pdflatex %FLAGS% main
 goto :EOF
 
 :release
-pdflatex main
+pdflatex %FLAGS% main
 biber main
-pdflatex main
+pdflatex %FLAGS% main
 goto :EOF
 
 :clean
@@ -28,4 +30,7 @@ for %%a in ("*.log") do del "%%a"
 for %%a in ("*.pdf") do del "%%a"
 for %%a in ("*.xml") do del "%%a"
 for %%a in ("*.toc") do del "%%a"
+for %%a in ("*.pyg") do del "%%a"
+for %%a in ("_minted-main\*") do del "%%a"
+rmdir _minted-main
 goto :EOF
