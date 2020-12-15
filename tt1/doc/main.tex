@@ -20,7 +20,8 @@
 \usepackage{listings}
 \usepackage{minted}
 \usepackage{amsfonts}
-\usepackage[backend=biber, style=authoryear]{biblatex}
+\usepackage{hyperref}
+\usepackage[backend=biber, style=authoryear, backref=true, hyperref=true]{biblatex}
 \usepackage[none]{hyphenat}
 \sloppy
 \usepackage[document]{ragged2e}
@@ -93,7 +94,7 @@ El hardware sobre el que se implementa el sistema se trata de la placa FRDM-KL46
 \section{Máquina de Estado Finito}
 Siguiendo la notación propuesta en las clases para cada estado, denotamos los estados por: $\frac{\text{nombre}}{\overset{\text{salida}}{\text{delay}}}$
 
-Para la implementación de esta FSM consideramos estados con tres posibles entradas:
+Para la implementación de esta FSM consideramos transiciones ante tres posibles entradas:
 \begin{itemize}
     \item Vacío ($\emptyset$): El usuario no pulsa el botón durante más de 1 tick
     \item Punto (\punto): El usuario pulsa el botón durante 1 tick
@@ -201,11 +202,14 @@ Para oxigenar el diagrama, en cada nodo que no se especifica el comportamiento d
 Como se especifica en el enunciado de la práctica, se ha programado el sistema de tal forma que SW1 introduce puntos (\punto) y SW2 rayas (\raya), y el método de lectura se detalla en \ref{reading_method}
 
 \subsection{Flujo del programa}
-El flujo del programa consiste en, primeramente la inicialización de todos los parámetros, irq handlers, y variables necesarias, y prosigue con la entrada al bucle infinito que sigue la FSM:
+El flujo del programa consiste en, primeramente la inicialización de todos los parámetros, irq handlers, y variables necesarias, y prosigue con la entrada al bucle infinito que sigue la FSM,
+debiendo cumplir dicho bucle un ciclo similar al siguiente:
 \begin{samepage}    
 \begin{minted}{c}
     while(1) {
-        set_output(state.output)
+        set_output(state.output)   // La ausencia de if en el output indica
+                                   // que tratamos con una máquina de Moore
+                                   // y no de Mealy
         delay(state.blinking_time)
         clear_output()
         delay(state.delay_time)
