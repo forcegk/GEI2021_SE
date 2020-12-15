@@ -20,7 +20,7 @@
 \usepackage{listings}
 \usepackage{minted}
 \usepackage{amsfonts}
-\usepackage[backend=biber, style=apa, autocite=inline]{biblatex}
+\usepackage[backend=biber, style=authoryear]{biblatex}
 \usepackage[none]{hyphenat}
 \sloppy
 \usepackage[document]{ragged2e}
@@ -473,5 +473,7 @@ Donde \texttt{digit} es la posición de izquierda a derecha [1..4] en el LCD del
 
 
 \clearpage
+\begin{flushleft}
 \printbibliography[]{}
+\end{flushleft}
 \end{document}
