@@ -8,9 +8,13 @@
 
 FLAGS = --shell-escape
 
-default: release
+default: references
 
-release: dirty
+release: references
+	pdflatex $(FLAGS) main
+
+refs: references
+references: dirty
 	biber main
 	pdflatex $(FLAGS) main
 
@@ -20,4 +24,5 @@ dirty: Makefile
 c: clean
 clean:
 	rm -f *.aux *.bbl *.bcf *.blg *.log *.pdf *.xml *.toc *.pyg *.out
+	rm -f preamble/*.aux
 	rm -rf ./_minted-main

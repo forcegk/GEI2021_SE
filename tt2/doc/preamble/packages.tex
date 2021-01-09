@@ -1,0 +1,63 @@
+% Font config
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage{amsfonts}
+\usepackage[babel=true]{microtype}
+\usepackage{inconsolata}
+
+% Figures, graphics, etc
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+% Math symbols
+\usepackage[mathscr]{eucal}
+\usepackage{amsmath}
+
+% Document Personalization and Language Configuration
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage{vmargin}
+\usepackage{eurosym} 
+\usepackage{xcolor}
+\usepackage[export]{adjustbox}
+\usepackage[document]{ragged2e}
+\usepackage[shortlabels]{enumitem}
+
+% Misc
+\usepackage{titling}
+\usepackage{titlesec}
+\usepackage{afterpage}
+\usepackage{csquotes}
+\usepackage{multirow}
+\usepackage{xurl}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{array}
+\usepackage{datetime}
+\usepackage{mfirstuc}
+
+% Special
+\usepackage{minted} % Minted needs python installed, and pygments on path [https://pypi.org/project/Pygments/]
+
+% Configurations
+\setcounter{secnumdepth}{4}
+\setlist[enumerate]{itemsep=0mm}
+\setlist[itemize]{itemsep=0mm}
+
+% No hyphenate
+\usepackage[none]{hyphenat}
+\sloppy
+
+% Packages for FSM and diagrams
+\usepackage{pgf}
+\usepackage{tikz}
+\usetikzlibrary{arrows,automata}
+
+% Packages for generation mock images
+\usepackage{duckuments}
+
+% Things for Morse
+\newcommand{\punto}{\kern+0.3pt\raisebox{0.35ex}{\huge\textbf.}}
+\newcommand{\raya}{\kern+0.2pt\raisebox{-0.35ex}{\huge\textbf-}}
