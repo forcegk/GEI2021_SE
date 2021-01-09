@@ -136,6 +136,7 @@ void slcdSet(uint8_t value, uint8_t digit){
 			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_A | LCD_S_B | LCD_S_C); /* To display '0' we must active segments: a, b & c on second front plane */
 			break;
 		case 0x01:
+			LCD->WF8B[LCD_Front_Pin[((2*digit)-2)]] = 0; // si no lo ponemos queda lo anterior
 			LCD->WF8B[LCD_Front_Pin[((2*digit)-1)]] = (LCD_S_B | LCD_S_C);
 			break;
 		case 0x02:
@@ -207,13 +208,18 @@ void slcdSet(uint8_t value, uint8_t digit){
   Function for conversion purpose, displaying (value) in specified (format)
  *----------------------------------------------------------------------------*/
 void slcdDisplay(uint16_t value ,uint16_t format){	
-	uint16_t tab[4] = {1, 2, 3, 4};
-	int i = 0;
+	uint8_t i = 0;
+  uint16_t divisor, temp_value = value;
 
-	/* TASK 2.7: Write value to the table in specified format */
-	
-	for(i=0; i < 4; i++){		
-		slcdSet(tab[i], i+1);
+	if(format == BASE10){
+		divisor = 10;
+	}else if(format == BASE16){
+		divisor = 16;
+	}
+
+	for(i=4; i >= 1; i--){
+		slcdSet(temp_value%divisor, i);
+		temp_value = temp_value / divisor;
 	}
 }
 /*----------------------------------------------------------------------------

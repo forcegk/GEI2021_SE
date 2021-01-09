@@ -9,6 +9,7 @@
  
 // Cabecera con definiciones para acceder facilmente a los recursos de la placa
 #include <MKL46Z4.H>
+#include "RTL.h"
 
 // -----------------------------------------------------------------------------
 // Internal: Inicializa el led en el puerto especificado
@@ -279,8 +280,9 @@ void msDelay(unsigned int delay) {
 // Internal: Instala un manejador para el contador de ticks
 // Simplemente definimos un simbolo de 'Vector Table' (fichero startup_XXXX.s)
 // -----------------------------------------------------------------------------
-void SysTick_Handler(void) {
-	msTicks++;
-}
+// RTX ya instala un SysTick_Handler
+// void SysTick_Handler(void) {
+// 	msTicks++;
+// }
 
 
