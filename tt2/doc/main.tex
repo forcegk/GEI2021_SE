@@ -52,7 +52,7 @@ El sistema se implementa sobre la placa FRDM-KL46Z.
 \subsection{Interfaz con el Sistema}\label{design_button_translation}
 La interacción con el sistema se realiza mediante los switches físicos SW1 y SW2. % TODO posible \ref (?)
 
-\subsection{Flujo del Programa}\label{pseudo_program_flow}
+\subsection{Flujo del Programa en Pseudocódigo}\label{pseudo_program_flow}
 El programa debe inicializar las tareas al inicio de su ejecución (\ref{tasks}).
 
 El funcionamiento de cada tarea será el siguiente:
@@ -60,50 +60,72 @@ El funcionamiento de cada tarea será el siguiente:
     \item init:
     \begin{samepage}    
     \begin{minted}{c}
-task1 = task_create()
-// [...]
+// inicializar recursos
 task5 = task_create()
+// [...]
+task1 = task_create()
 task_delete_self()
     \end{minted}
     \end{samepage}
-    \item task1:
-    \begin{samepage}    
+    \item task1:   
     \begin{minted}{c}
+// Procesamos los elementos de los arrays
 for(array...){
     result = compare_angles(array1, array2)
 
     if(result == complementary)
-        os_event_set(FLAG_ANGLE, task2)
+        // ángulos son complementarios
+        // seteamos los parámetros apropiados
     else if(result == supplementary)
-        os_event_set(FLAG_ANGLE, task3)
+        // ángulos son suplementarios...
     else
-        os_event_set(FLAG_ANGLE, task4)
+        // ángulos no tienen ninguna relación...
+    
+    if(tarea_correspondiente_al_angulo_esta_ocupada)
+        // si la tarea que maneja el tipo de ángulo detectado
+        // está ocupada o pendiente de i/o con el usuario, tenemos
+        // que esperar a que mande "ACK" conforme ya está lista
+        os_event_wait_and(flag_del_angulo_correpondiente, NO_TIMEOUT)
+    else
+        // por esta rama solo se entra si la tarea no está esperando
+        // input, es decir, la primera vez que encontramos un ángulo
+        tarea_correspondiente_al_angulo_esta_ocupada = 1
+
+    os_evt_set(flag_del_angulo_correspondiente, task_x);
 }
-os_event_set(FLAG_TAKEOVER, task2)
+// Al terminar el procesado, esperamos a que terminen todas las
+// tareas para dar paso a la tarea 5, y matar el resto de tareas.
+os_event_wait_and(tareas_que_quedan_por_terminar, NO_TIMEOUT)
+os_task_delete(task2..4)
+os_event_set(FLAG_TURNO_TASK5, task5)
 task_delete_self()
     \end{minted}
-    \end{samepage}
     \item task2:
     \begin{samepage}    
     \begin{minted}{c}
 while(1){
-    // PREGUNTA PARA DÍA 16: Los eventos se garantiza que se entreguen
-    // en orden? Pensé en usar un mutex si fuese necesario que la task
-    // mostrase el número MIENTRAS se cuenta
-
-    result = os_event_wait_or(FLAG_ANGLE | FLAG_TAKEOVER, MAX_TIMEOUT)
+    // Esperamos a recibir un evento que nos indique que hay un
+    // ángulo que debemos manejar
+    result = os_event_wait_and(FLAG_ANGLE, NO_TIMEOUT)
     
-    if(os_event_get(result) & FLAG_ANGLE)
-        count++
-    // pueden darse ambos eventos simultaneamente (no else)
-    if(os_event_get(result) & FLAG_TAKEOVER)
-        lcd_write(count)
-        led_write(LED_GREEN, 1)
-        while(!sw1)
+    // Esperamos a poder tener acceso al LCD
+    os_mutex_wait(lcd_mutex, NO_TIMEOUT)
+
+    count++
+    slcdDisplay(count)
+
+    led_write(LED_GREEN, 1)
+    while(!sw1){} //esperamos por input del usuario
+
+    // Apagamos lo que encendiésemos
+    led_write(LED_GREEN, 0)
+
+    // Avisamos de que hemos terminado nuestra parte
+    os_event_set(ACK_ANGLE_COMPLEMENTARY, task1)
+
+    // Y liberamos el mutex cuando el usuario presiona el botón
+    os_mutex_release(lcd_mutex)  
 }
-led_write(LED_GREEN, 0)
-os_event_set(FLAG_TAKEOVER, task3)
-task_delete_self()
     \end{minted}
     \end{samepage}
     \item task3:
@@ -112,9 +134,6 @@ task_delete_self()
 while(1){
     // idem a task2 pero con LED_RED
 }
-led_write(LED_RED, 0)
-os_event_set(FLAG_TAKEOVER, task4)
-task_delete_self()
     \end{minted}
     \end{samepage}
     \item task4:
@@ -123,20 +142,26 @@ task_delete_self()
 while(1){
     // idem a task2 pero con ambos led (alternativamente)
 }
-led_write(LED_GREEN, 0)
-led_write(LED_RED, 0)
-os_event_set(FLAG_TAKEOVER, task5)
-task_delete_self()
     \end{minted}
     \end{samepage}
     \item task5:
     \begin{samepage}    
     \begin{minted}{c}
-result = os_event_wait_or(FLAG_TAKEOVER, MAX_TIMEOUT)
+// esperamos hasta que todas las tareas hayan terminado, momento
+// en el cual nos llegará este evento
+os_event_wait_and(FLAG_TURNO_TASK5, NO_TIMEOUT)
+
+// mostramos nuestra salida
+slcdClear();
 led_write(LED_GREEN, 1)
 led_write(LED_RED, 1)
 
-// queda a investigar qué ocurre en la fase de implementación
+while(!sw1 && !sw2){} //esperamos input
+
+led_write(LED_GREEN, 0)
+led_write(LED_RED, 0)
+
+task_delete_self() // y terminamos
     \end{minted}
     \end{samepage}
 
@@ -145,17 +170,22 @@ led_write(LED_RED, 1)
 \subsection{Diagrama de Tareas}\label{tasks}
 \subsubsection{Tareas y eventos}
 El diagrama muestra la comunicación que existe entre Task1 y el resto de las tasks, siguiendo el pseudocódigo propuesto en \ref{pseudo_program_flow}, en el que Task1 envía un evento
-a la task correspondiente para que cuente la relación entre los ángulos.
+a la task correspondiente para que anote uno más y espere su turno para i/o con el usuario.
 
 Además, se puede observar que hay dos tipos de líneas:
 \begin{itemize}
-    \item Las líneas sólidas indican transmisión de datos de una task a otra, en este caso el envío de eventos.
-    \item Las líneas rayadas indican la cesión del control y posterior eliminación de la tarea invocadora.
+    \item Las líneas sólidas indican una task activando eventos de otra.
+    \item Las líneas rayadas indican los ``ACK'' que envían cada una de las tareas para indicar que están preparadas para recibir más datos.
+    \item La línea rayada de init a Task1 no sabía muy bien como representarla, pero básicamente está ahí para que init pueda hacer acto de presencia, e indicar que debido a que
+          el resto de tareas esperan, a efectos prácticos, al morir init, la única task que no espera eventos es Task1, por lo que le ``cede el control''.
 \end{itemize}
 
 Por legibilidad no se ha incluido la creación de las tareas, ya que todas son creadas por init al inicio del programa.
 
 \subsubsection{Representación}
+
+\bigskip
+
 \begin{center}
 \begin{tikzpicture}[->,>=stealth, shorten >=1pt, auto, node distance=3.2cm, semithick]
     \tikzstyle{every state}=[draw=black,text=black]
@@ -170,20 +200,22 @@ Por legibilidad no se ha incluido la creación de las tareas, ya que todas son c
     \node[state, right=0.8cm]           (task4)   [below right of=task1]       {$\frac{\text{Task4}}{\text{\textcolor{green}{\punto} $\leftrightarrow$ \textcolor{red}{\punto}}}$};
     \node[state, right=2cm]             (task5)   [right       of=task4]       {$\frac{\text{Task5}}{\text{\textcolor{green}{\punto} \& \textcolor{red}{\punto}}}$};
 
+    \begin{pgfinterruptboundingbox}
     \path[sloped,anchor=south]
-        (task1) edge                node {comp.}             (task2)
-                edge                node {supl.}             (task3)
-                edge                node {otro}             (task4)
+        (task1)  edge [bend left=6,looseness=0.3]      node {COMPL}     (task2)
+                 edge [bend left=6,looseness=0.3]      node {SUPL}      (task3)
+                 edge [bend left=6,looseness=0.3]      node {OTRO}      (task4)
+    ;
+    \path[sloped,anchor=north]
+        (task1)  edge [bend right=75,looseness=0.75]   node {FINAL}          (task5)
     ;
     \path[dashed]
-        (init)  edge [bend right=10,looseness=0.5]      node {}          (task1)
-        (task1) edge [bend right=10,looseness=0.5]      node {}          (task2)
-
-        (task2) edge                node {SW1}          (task3)
-        (task3) edge                node {SW1}          (task4)
-
-        (task4) edge                node {SW1 or SW2}   (task5)
+        (task2)  edge [bend left=6,looseness=0.3]      node {}          (task1)
+        (task3)  edge [bend left=6,looseness=0.3]      node {}          (task1)
+        (task4)  edge [bend left=6,looseness=0.3]      node {}          (task1)
+        (init)  edge []                                node {}          (task1)
     ;
+    \end{pgfinterruptboundingbox}
 \end{tikzpicture}
 \end{center}
 
@@ -194,10 +226,293 @@ Por legibilidad no se ha incluido la creación de las tareas, ya que todas son c
 \clearpage
 \section{Implementación}
 \subsection{Decisiones de diseño}
-A completar en segunda entrega.
+\subsubsection{Diseño de la concurrencia}\label{concurrencia_angulos}
+El enunciado de la práctica da lugar a múltiples interpretaciones, por lo que he tenido que replantear la práctica un par de veces. Tal cual
+lo entiendo ahora mismo, se entiende que el flujo del programa es el siguiente:
+\begin{enumerate}
+    \item Se inicia la placa y la tarea 1 calcula el primer ángulo, por lo que se mostrará un 1 en el LCD y se encenderá(n) el LED correspondiente.
+    \item Al presionar SW1 se pasa a la siguiente tarea, es decir, si el siguiente ángulo era del mismo tipo se mostrará un 2 en el LCD, manteniendo el LED estático.
+          Por otro lado si el siguiente ángulo fuese diferente, se mostrará un 1 y cambiará el patrón de los LEDs.
+    \item Al terminar de presionar SW1 tantas veces como ángulos queremos comparar, se apaga el LCD y se encienden los dos LEDs: Hemos entrado en la tarea 5.
+    \item Al pulsar SW1 o SW2 se apaga todo y no se hace nada más. 
+\end{enumerate}
+
+Es decir, que tomamos una aproximación ciertamente limitada por el número de inputs que puede realizar el usuario. Si el usuario no pulsa SW1, no seguimos contando.
+
+Esto último me ha dado ciertos dolores de cabeza, ya que inicialmente la tarea 1 debía contar en segundo plano, y con SW1 se iba cambiando secuencialmente entre las tareas 2, 3 y 4,
+viendo el estado del contador interno de cada una de ellas ``en directo''. Tras comentar con compañeros qué entendían en el enunciado, y tras la revisión, parece que hay un consenso
+en que se debe hacer de la manera que he implementado, y \emph{espero} que esté bien.
+
+\bigskip
+
+Se ha optado por comunicación a través de eventos, ya que si bien los mensajes se han tenido en consideración, creo que los eventos facilitan la concurrencia en este escenario, y es que
+tras comentar en la revisión que ``se debía aprovechar concurrencia'' estuve dandole vueltas a que, realmente, si únicamente hacemos comunicación a través de eventos, y no computamos
+el siguiente ángulo hasta que no pulsamos el switch, no deja de ser un programa puramente secuencial, que hemos partido en tasks por hacernos la vida más difícil.
+
+\bigskip
+
+Debido a esto se ha implementado un sistema que aprovecha la concurrencia de una forma interesante: El siguiente ángulo siempre se computa \emph{ahead of time} (\ref{concurrencia_angulos}),
+siendo el \emph{speedup} de este cambio mínimo en este caso, pero haciéndose mucho más notable si el cálculo a realizar tuviese un tiempo de procesado más elevando.
+
+De esta forma, podemos computar hasta tres ángulos \emph{ahead of time}, \emph{e.g.}
+\begin{enumerate}
+    \item Ángulos complementarios -> Se activa evento en task2 -> Bloquea el mutex
+    \item Ángulos suplementarios -> Se activa evento en task3 -> Espera por el mutex
+    \item Ángulos sin relación -> Se activa evento en task4 -> Espera por el mutex
+    \item Ángulos complementarios -> Espera a que task2 mande el ack
+    \item Usuario pulsa SW1 -> task2 libera el mutex y manda ack a task1 -> task3 bloquea el mutex -> task2 recibe el ángulo complementario anteriormente en espera y bloquea el mutex de nuevo
+    \item \ldots
+\end{enumerate}
+
+\bigskip
+
+O en forma de tabla:
+
+\begin{center}
+\begin{tabular}{ | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{0.8cm} |}
+    \hline
+    Task1                   &   Task2        & Task3 & Task4 & i/o\\
+    \hline
+    Complementarios         &   Recibe evento, bloquea mutex & - & - & \textcolor{green}{\text{\punto}} \\
+    \hline
+    Suplementarios          &   - & Recibe evento, espera mutex & - & \textcolor{green}{\text{\punto}} \\
+    \hline
+    Sin Relación            &  - & - & Recibe evento, espera mutex & \textcolor{green}{\text{\punto}} \\
+    \hline
+    Complementarios, espera a que task2 mande ack para enviar evento         &  - & - & - & \textcolor{green}{\punto} SW1\\
+    \hline
+    Recibe ack de task2, y envia evento a task2   &   Libera mutex y ack a task1, espera mutex & Bloquea mutex & - & \textcolor{red}{\text{\punto}}\\
+    \hline
+\end{tabular}
+\end{center}
+
+\bigskip
+
+En el peor de los casos, siempre tendremos un ángulo en espera, \emph{e.g. solamente medimos ángulos complementarios}:
+\begin{enumerate}
+    \item Ángulos complementarios -> Se activa evento en task2 -> Bloquea el mutex
+    \item Ángulos complementarios -> Espera a que task2 mande el ack
+    \item Usuario pulsa SW1 -> task2 libera el mutex y manda ack a task1 -> task2 recibe el ángulo complementario anteriormente en espera y bloquea el mutex de nuevo
+    \item Ángulos complementarios -> Espera a que task2 mande el ack
+    \item \ldots
+\end{enumerate}
+
+\begin{center}
+\begin{tabular}{ | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{3cm} | >{\centering\arraybackslash}m{0.8cm} |}
+    \hline
+    Task1                   &   Task2        & Task3 & Task4 & i/o\\
+    \hline
+    Complementarios         &   Recibe evento, bloquea mutex & - & - & \textcolor{green}{\text{\punto}} \\
+    \hline
+    Complementarios, espera a que task2 mande ack para enviar evento         &  - & - & - & \textcolor{green}{\punto} SW1\\
+    \hline
+    Recibe ack de task2, y envia evento a task2   &   Libera mutex y ack a task1, bloquea mutex & - & - & \textcolor{green}{\text{\punto}}\\
+    \hline
+\end{tabular}
+\end{center}
+
+\subsubsection{Método de lectura}
+Al igual que en el anterior trabajo tutelado, se ha optado por entrada salida por interrupciones, ya que requiere menos CPU, y en general, es lo suficientemente sencilla como
+para permitirnos reutilizarla para esta práctica.
+
+\subsubsection{Corner cases}\label{corner_cases}
+No se han identificado corner cases, ya que cada tarea deja a lo largo de su ciclo todos los dispositivos de i/o ``como los encontró''.
+
+Todas las tareas parten de que los LEDs están apagados, y los switches SW1 y SW2 despulsados. Para esto todas las tareas al terminar su ejecución (\ref{generic_counting_tasks})
+ejecutan la función \texttt{clear\_phy()}:
+\begin{samepage}
+\begin{minted}{c}
+    void clear_phy(void){
+        setLedG(0); setLedR(0);
+        sw1 = 0; sw2 = 0;
+    }
+\end{minted}
+\end{samepage}
+
+\subsubsection{Inicialización de los Dispositivos de i/o}
+Los dispositivos de entrada (switches) y salida (LEDs) no se pueden inicializar cuando el sistema RTX está iniciado, por lo que se han de inicializar en la función \texttt{main} antes
+de iniciar el sistema operativo:
+\begin{minted}{c}
+    int main (void) {
+        // Inicializar rutinas de interrupción
+        initSwitch1(sw1_pressed);
+        initSwitch3(sw2_pressed);
+        
+        // Inicializar sLcd
+        slcdInitialize();
+        
+        // Inicializar los LEDs poniendolos a apagado
+        setLedG(0);
+        setLedR(0);
+        
+        os_sys_init(init);
+    }
+\end{minted}
+
+
 
 \subsection{Detalles de Implementación}
-A completar en segunda entrega.
+Creo que este trabajo no necesita de tante explicación como el anterior, donde había que explicar cómo se interpretaban los estados, etc.
+
+La aproximación ha sido la siguiente, la tarea 1 tenemos que programarla \emph{ad-hoc} si o si, ya que hace una función única. Sin embargo, las tareas 2 a 4 realizan la misma función
+exceptuando que interaccionan con unos eventos diferentes, y encienden los LEDs con patrones diferentes, por lo que se han creado las ``tareas genéricas de conteo'', denotadas por
+\texttt{task\_generic}, que como se comenta en \ref{generic_counting_tasks}, a parte de simplificar el código y seguir el principio DRY, reduce el tamaño total del programa, haciendolo
+más cómodo de leer y mantenible, debido a que no hay que propagar los cambios a tres versiones casi idénticas de las tareas que cuentan ángulos.
+
+La tarea 5 también se ha diseñado e implementado \emph{ad-hoc}.
+
+\subsubsection{Tarea 1}
+Esta tarea recorre los dos arrays de ángulos, de tamaño fijo, denotado por \texttt{ANGLE\_ARRAY\_LEN}:
+\begin{minted}{c}
+    #define ANGLE_ARRAY_LEN 10
+\end{minted}
+
+Al recorrerlo tenemos tres posibles resultados: 
+\begin{itemize}
+    \item \texttt{ANGLE\_COMPL}: Ángulo Complementario
+    \item \texttt{ANGLE\_SUPPL}: Ángulo Suplementario
+    \item \texttt{ANGLE\_NANGL}: Ángulos sin Relación (\texttt{\textcolor{red}{NANGL} = \textcolor{red}{N}onrelated \textcolor{red}{ANGL}es})
+\end{itemize}
+
+\bigskip
+
+Sabiendo la relación entre los ángulos, podemos clasificarlos con el siguiente switch, el cual asigna el evento y tid que se han de emplear para comunicarse con la tarea correspondiente:
+\begin{minted}{c}
+    switch(result){
+        case ANGLE_COMPL:
+            curr_flag = FLAG_ANGLE_COMPL;
+            curr_tid = t_2;
+            break;
+        case ANGLE_SUPPL:
+            curr_flag = FLAG_ANGLE_SUPPL;
+            curr_tid = t_3;
+            break;
+        case ANGLE_NANGL:
+            curr_flag = FLAG_ANGLE_NANGL;
+            curr_tid = t_4;
+            break;
+    }
+\end{minted}
+
+Y este bloque de código se encarga de enviar los eventos, y realizar la espera cuando una tarea ya está ocupada:
+\begin{minted}{c}
+    if(tasks_waiting & curr_flag){
+        os_evt_wait_and(curr_flag, 0xFFFF);
+    }else{
+        tasks_waiting |= curr_flag;
+    }
+
+    os_evt_set(curr_flag, curr_tid);
+\end{minted} 
+
+\bigskip
+
+Finalmente cuando todas las tareas han terminado, se matan directamente desde la tarea 1. Esta es una decisión que debido al tamaño del programa creo que es completamente lógica: No hay
+tareas colgando de las tareas que cuentan, y crear un evento similar al \texttt{SIGTERM} de Linux sería complicar el código innecesariamente cuando tenemos una función que hace muy bien 
+lo que promete y es mucho más sencilla.
+\begin{minted}{c}
+    os_evt_wait_and(tasks_waiting, 0xFFFF);
+    os_tsk_delete(t_2);
+    os_tsk_delete(t_3);
+    os_tsk_delete(t_4);
+    os_evt_set(1, t_5);
+    
+    os_tsk_delete_self(); // Cuando hayamos terminado, salimos
+\end{minted}
+
+Línea importante aquí es \texttt{os\_evt\_wait\_and(tasks\_waiting, 0xFFFF);}, que hace que si por ejemplo nuestro programa solamente ha contado ángulos complementarios no espere por
+las tareas de los suplementarios y los sin clasificar, ya que nunca enviarán nada, y quedará bloqueado.
+
+\subsubsection{Tareas Genéricas de Conteo}\label{generic_counting_tasks}
+Tras una idea feliz antes de ir a dormir el día anterior a cuando pensaba entregar, se me ocurrió la \emph{ahora obvia} idea de que podía juntar las tareas de conteo en una sola tarea
+genérica, no para ganar en velocidad, pero sí para ganar en mantenibilidad y ser más rigurosos con el principio DRY, a parte de reducir el tamaño del código, puesto que tenemos menos código
+de repetido para las funciones de conteo, a cambio de una ligeramente mayor y genérica.
+
+\bigskip
+
+Así, y siguendo el pseudocódigo en \ref{pseudo_program_flow}, la implementación de la tarea genérica es:
+\begin{minted}{c}
+    __task void task_generic(void* argv){
+        uint16_t count = 0;
+        
+        #define my_flag (*(uint16_t*) argv)
+        //uint16_t my_flag = *(uint16_t*) argv;
+        
+        while(1){
+            if(os_evt_wait_or(my_flag, 0xFFFF) == OS_R_EVT){
+                
+                os_mut_wait(mut_1, 0xFFFF);
+                
+                count++;
+                slcdDisplay(count, 10);
+                
+                switch(my_flag){
+                    case FLAG_ANGLE_COMPL:
+                        setLedG(1);
+                        while(!sw1){os_dly_wait(DEFAULT_WAIT_TIME);}
+                        break;
+                    case FLAG_ANGLE_SUPPL:
+                        setLedR(1);
+                        while(!sw1){os_dly_wait(DEFAULT_WAIT_TIME);}
+                        break;
+                    case FLAG_ANGLE_NANGL:
+                        while(!sw1){
+                            setLedG(0);
+                            setLedR(1);
+                            os_dly_wait(DEFAULT_WAIT_TIME);
+                            setLedG(1);
+                            setLedR(0);
+                            os_dly_wait(DEFAULT_WAIT_TIME);
+                        }
+                        break;
+                }
+
+                clear_phy();
+                os_evt_set(my_flag, t_1);
+                
+                os_mut_release(mut_1);
+            }
+        }
+        #undef my_flag
+    }
+\end{minted}
+
+En esta tarea podemos observar varias cosas, la primera y más evidente es la línea:
+\begin{minted}{c}
+    #define my_flag (*(uint16_t*) argv)
+    //uint16_t my_flag = *(uint16_t*) argv;
+\end{minted}
+que sustituye a la asignación de la variable que había anteriormente en su lugar, y que por claridad se ha dejado debajo como comentario. De esta forma se evita una instrucción de
+asignación, el uso de memoria en el stack, y no hay inconvenientes, puesto que el tiempo de acceso es el mismo. Lo que si, es necesario hacer \texttt{\#undef my\_flag} al final de la
+función para imitar el funcionamiento de cuando la variable cae \emph{out of scope}, es decir, poder utilizar otras variables llamadas \texttt{my\_flag} a lo largo del código. 
+
+\bigskip
+
+Continuando tenemos el switch de \texttt{my\_flag}, que define el comportamiento particular de la función, según escuche un tipo u otro de ángulos:
+\begin{minted}{c}
+    switch(my_flag){
+        case FLAG_ANGLE_COMPL:
+            setLedG(1);
+            while(!sw1){os_dly_wait(DEFAULT_WAIT_TIME);}
+            break;
+        case FLAG_ANGLE_SUPPL:
+            setLedR(1);
+            while(!sw1){os_dly_wait(DEFAULT_WAIT_TIME);}
+            break;
+        case FLAG_ANGLE_NANGL:
+            while(!sw1){
+                setLedG(0);
+                setLedR(1);
+                os_dly_wait(DEFAULT_WAIT_TIME);
+                setLedG(1);
+                setLedR(0);
+                os_dly_wait(DEFAULT_WAIT_TIME);
+            }
+            break;
+    }
+\end{minted}
+
+Al terminar, como se menciona en \ref{corner_cases}, se ejecuta \texttt{clear\_phy()}, para dejar la i/o como se encontró.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

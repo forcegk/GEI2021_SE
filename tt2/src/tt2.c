@@ -141,7 +141,7 @@ angle_match_type compare_angles(const angle angle1, const angle angle2){
 __task void task_5(void){
 	
 	while(os_evt_wait_and(1, 0xFFFF) != OS_R_EVT){
-		os_evt_wait_and(1, 0xFFFF);
+		os_dly_wait(DEFAULT_WAIT_TIME);
 	}
 	
 	os_mut_wait(mut_1, 0xFFFF); // No es necesario, pero por si acaso, no hace
