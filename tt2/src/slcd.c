@@ -209,17 +209,17 @@ void slcdSet(uint8_t value, uint8_t digit){
  *----------------------------------------------------------------------------*/
 void slcdDisplay(uint16_t value ,uint16_t format){	
 	uint8_t i = 0;
-  uint16_t divisor, temp_value = value;
-
-	if(format == BASE10){
-		divisor = 10;
-	}else if(format == BASE16){
-		divisor = 16;
+  uint16_t temp_value = value;
+	
+	if(format < 2 || format > 16){
+		slcdSet(0xe, 1);
+		slcdSet(0xFF, 2);
+		slcdSet(0xFF, 3);
 	}
 
 	for(i=4; i >= 1; i--){
-		slcdSet(temp_value%divisor, i);
-		temp_value = temp_value / divisor;
+		slcdSet(temp_value%format, i);
+		temp_value = temp_value / format;
 	}
 }
 /*----------------------------------------------------------------------------

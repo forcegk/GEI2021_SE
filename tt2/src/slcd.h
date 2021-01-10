@@ -41,9 +41,6 @@
 #define LCD_FRONT6 10u
 #define LCD_FRONT7 11u
 
-#define BASE10 10
-#define BASE16 16
-
 const static uint8_t LCD_Front_Pin[LCD_N_FRONT] = {LCD_FRONT0, LCD_FRONT1, LCD_FRONT2, LCD_FRONT3, LCD_FRONT4, LCD_FRONT5, LCD_FRONT6, LCD_FRONT7};
 
 void slcdInitialize(void);
