@@ -7,4 +7,4 @@
 
 ## Trabajos Tutelados
 - [x] Trabajo Tutelado 1
-- [ ] Trabajo Tutelado 2
+- [x] Trabajo Tutelado 2

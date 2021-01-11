@@ -50,7 +50,7 @@ El sistema se implementa sobre la placa FRDM-KL46Z.
 \clearpage
 \section{Especificación}
 \subsection{Interfaz con el Sistema}\label{design_button_translation}
-La interacción con el sistema se realiza mediante los switches físicos SW1 y SW2. % TODO posible \ref (?)
+La interacción con el sistema se realiza mediante los switches físicos SW1 y SW2, y el sistema interacciona con el usuario mediante los LED Rojo, Verde, y el LCD.
 
 \subsection{Flujo del Programa en Pseudocódigo}\label{pseudo_program_flow}
 El programa debe inicializar las tareas al inicio de su ejecución (\ref{tasks}).
@@ -288,7 +288,7 @@ O en forma de tabla:
 
 \bigskip
 
-En el peor de los casos, siempre tendremos un ángulo en espera, \emph{e.g. solamente medimos ángulos complementarios}:
+En el peor de los casos, siempre tendremos un ángulo en espera, \emph{e.g.} solamente medimos ángulos complementarios:
 \begin{enumerate}
     \item Ángulos complementarios -> Se activa evento en task2 -> Bloquea el mutex
     \item Ángulos complementarios -> Espera a que task2 mande el ack
@@ -318,8 +318,8 @@ para permitirnos reutilizarla para esta práctica.
 \subsubsection{Corner cases}\label{corner_cases}
 No se han identificado corner cases, ya que cada tarea deja a lo largo de su ciclo todos los dispositivos de i/o ``como los encontró''.
 
-Todas las tareas parten de que los LEDs están apagados, y los switches SW1 y SW2 despulsados. Para esto todas las tareas al terminar su ejecución (\ref{generic_counting_tasks})
-ejecutan la función \texttt{clear\_phy()}:
+Todas las tareas parten de que los LEDs están apagados, y los switches SW1 y SW2 despulsados. Para esto todas las tareas al terminar la entrada/salida con el usuario
+(\ref{generic_counting_tasks}) ejecutan la función \texttt{clear\_phy()}:
 \begin{samepage}
 \begin{minted}{c}
     void clear_phy(void){
@@ -330,8 +330,8 @@ ejecutan la función \texttt{clear\_phy()}:
 \end{samepage}
 
 \subsubsection{Inicialización de los Dispositivos de i/o}
-Los dispositivos de entrada (switches) y salida (LEDs) no se pueden inicializar cuando el sistema RTX está iniciado, por lo que se han de inicializar en la función \texttt{main} antes
-de iniciar el sistema operativo:
+Los dispositivos de entrada (switches) y salida (LEDs), así como las rutinas de interrupción no se pueden inicializar cuando el sistema RTX está iniciado, por lo que se han de
+inicializar en la función \texttt{main} antes de iniciar el sistema operativo:
 \begin{minted}{c}
     int main (void) {
         // Inicializar rutinas de interrupción
@@ -341,6 +341,7 @@ de iniciar el sistema operativo:
         // Inicializar sLcd
         slcdInitialize();
         
+
         // Inicializar los LEDs poniendolos a apagado
         setLedG(0);
         setLedR(0);
@@ -352,7 +353,7 @@ de iniciar el sistema operativo:
 
 
 \subsection{Detalles de Implementación}
-Creo que este trabajo no necesita de tante explicación como el anterior, donde había que explicar cómo se interpretaban los estados, etc.
+Creo que este trabajo no necesita de tanta explicación como el anterior, donde había que explicar cómo se interpretaban los estados, etc.
 
 La aproximación ha sido la siguiente, la tarea 1 tenemos que programarla \emph{ad-hoc} si o si, ya que hace una función única. Sin embargo, las tareas 2 a 4 realizan la misma función
 exceptuando que interaccionan con unos eventos diferentes, y encienden los LEDs con patrones diferentes, por lo que se han creado las ``tareas genéricas de conteo'', denotadas por
@@ -611,7 +612,7 @@ Las funciones \texttt{os\_evt\_wait\_or/and} eliminan todas las flags que espera
 claro el comportamiento, y como estaba teniendo problemas con el código, no tenía claro si mis suposiciones eran ciertas o no (que al final terminaron siendo).
 
 La respuesta es clara: Tanto \texttt{os\_evt\_wait\_or} como \texttt{os\_evt\_wait\_and} eliminan las flags que están esperando. Esto se puede consultar en la implementación como comenta
-el usuario ``Måns Andersson'' en \url{https://community.arm.com/developer/tools-software/tools/f/keil-forum/39939/source-code-for-rtx} en la ruta
+el usuario Måns Andersson en \citetitle{arm_forum_asking_for_source_code_rtx} en la ruta
 \texttt{<keil-dir>$\backslash$ARM$\backslash$RL$\backslash$RTX$\backslash$SRC},
 siendo el archivo que nos interesa en nuestro caso \texttt{$\backslash$Keil$\backslash$ARM$\backslash$RL$\backslash$RTX$\backslash$SRC$\backslash$ARM$\backslash$rt\_Event.c}, donde podemos
 ver claramente en la función
@@ -665,6 +666,41 @@ se entra en un poco más de detalle:
           Ya que si bien la tarea puede no haber llegado a un wait cuando se le activa un evento, al estar éste activado en la TCB, que se
           crea a la vez que la tarea, simplemente leerá de las flags y verá que los bits en las event flags ya coinciden con su requerimiento, continuando directamente.
 \end{itemize}
+Lo cual se puede observar en las primeras líneas de la implementación de \texttt{os\_evt\_set}:
+\begin{minted}{c}
+    void os_evt_set (U16 event_flags, OS_TID task_id) {
+    /* Set one or more event flags of a selectable task. */
+    P_TCB p_tcb;
+
+    p_tcb = os_active_TCB[task_id-1];
+    if (p_tcb == NULL) {
+        return;
+    }
+    tsk_lock();
+    p_tcb->events |= event_flags;
+    event_flags    = p_tcb->waits;
+    /* If the task is not waiting for an event, it should not be put */
+    /* to ready state. */
+    if (p_tcb->state == WAIT_AND) {
+        /* Check for AND-connected events */
+        if ((p_tcb->events & event_flags) == event_flags) {
+        goto wkup;
+        }
+    }
+    if (p_tcb->state == WAIT_OR) {
+        /* Check for OR-connected events */
+        if (p_tcb->events & event_flags) {
+        p_tcb->waits  &= p_tcb->events;
+    wkup: p_tcb->events &= ~event_flags;
+        os_rmv_dly (p_tcb);
+        p_tcb->state   = READY;
+        p_tcb->ret_val = OS_R_EVT;
+        os_dispatch (p_tcb);
+        }
+    }
+    tsk_unlock();
+    }
+\end{minted}
 
 El resto se cubre muy por encima y no es nada que no se haya explicado previamente en clase.
 
