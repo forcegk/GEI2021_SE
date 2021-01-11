@@ -486,6 +486,8 @@ que sustituye a la asignación de la variable que había anteriormente en su lug
 asignación, el uso de memoria en el stack, y no hay inconvenientes, puesto que el tiempo de acceso es el mismo. Lo que si, es necesario hacer \texttt{\#undef my\_flag} al final de la
 función para imitar el funcionamiento de cuando la variable cae \emph{out of scope}, es decir, poder utilizar otras variables llamadas \texttt{my\_flag} a lo largo del código. 
 
+Con esta asignación accedemos al parámetro que pasamos desde la creación de la tarea, en init (\ref{task_init}).
+
 \bigskip
 
 Continuando tenemos el switch de \texttt{my\_flag}, que define el comportamiento particular de la función, según escuche un tipo u otro de ángulos:
@@ -514,6 +516,35 @@ Continuando tenemos el switch de \texttt{my\_flag}, que define el comportamiento
 
 Al terminar, como se menciona en \ref{corner_cases}, se ejecuta \texttt{clear\_phy()}, para dejar la i/o como se encontró.
 
+\subsubsection{Tarea init}\label{task_init}
+La tarea init no tiene mayor complicación: inicializa los recursos que gestiona el sistema operativo (los mutexes) y las tareas.
+\begin{minted}{c}
+    __task void init(void){
+        os_mut_init(mut_1);
+        t_5 = os_tsk_create(task_5, 1);
+        t_4 = os_tsk_create_ex(task_generic, 1, (void*) &flags_by_task[2]);
+        t_3 = os_tsk_create_ex(task_generic, 1, (void*) &flags_by_task[1]);
+        t_2 = os_tsk_create_ex(task_generic, 1, (void*) &flags_by_task[0]);
+        t_1 = os_tsk_create(task_1, 1);
+        os_tsk_delete_self();
+    }
+\end{minted}
+
+Como se puede observar, se inicializa el mutex, se crean las tareas en orden inverso (no por ninguna razón en particular, funcionaría exactamente igual si se invirtiese), 
+y finalmente se elimina a si misma.
+
+\bigskip
+
+El array \texttt{flags\_by\_task} es el siguiente:
+\begin{minted}{c}
+    const uint16_t flags_by_task[3] = {FLAG_ANGLE_COMPL, FLAG_ANGLE_SUPPL,
+                                       FLAG_ANGLE_NANGL};
+\end{minted}
+que como se puede ver, se almacena en la zona de constantes.
+
+Realmente se puede castear el valor del propio flag a (void*) y dentro de la tarea no recorrer el puntero, pero un poco por seguir la convención, he decidido pasar el valor apuntado, 
+que, de todos modos, no crea prácticamente overhead, ya que la complejidad del acceso a memoria fuera de un for es constante O(1).
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                  DESCRIPCIÓN EVENTOS                                                  %
@@ -530,17 +561,19 @@ opciones para realizar esto mismo, entre otras:
 \end{itemize}
 
 \subsection{Decisión de Diseño}
-En este caso se ha escogido la comunicación por eventos, a pesar de haber pensado inicialmente en una comunicación mediante mensajes, debido a que considero
-que puedo aprender más utilizando los eventos (sistema que no he usado como tal), y queda un sistema definitivamente dinámico, en el que prácticamente usamos los elementos como
-``paquetes enrutados'', que llegan a receptores en una red, y además siendo utilizados también como método de señalizado a modo de testigo.
+En este caso se ha escogido la comunicación por eventos. Inicialmente pensé en una comunicación mediante mensajes, pero me decanté por eventos debido a que consideraba que podía
+aprender más utilizando los eventos. De todos modos, después de la primera reunión me quedó claro que el planteamiento que estaba siguiendo no era el adecuado (calcular los ángulos
+inicialmente), y viendo la implementación actual, definitivamente una comunicación por eventos es una aproximación mucho más adecuada que por mensajes, quedando un sistema dinámico,
+en el que usamos los elementos casi como ``paquetes enrutados'', que llegan a ``puertos'' en las tareas, haciendo un símil con una red IP.
 
-Todo esto desde mi punto de vista hace que resulte un sistema conceptualmente bastante satisfactorio, en el que podemos visualizar una intensiva comunicación inter-proceso.
+Todo esto desde mi punto de vista hace que resulte un sistema conceptualmente bastante satisfactorio, en el que podemos visualizar una dinámica comunicación inter-proceso aprovechando
+la concurrencia en mayor o menor medida según el dataset, pero definitivamente, más rápido que realizando un enfoque puramente secuencial.
 
 \subsection{Explicación detallada}
-No he encontrado tanta información como me gustaría acerca de este tema (\textcolor{blue}{solicitar sugerencia de bibliografía}), a parte de en la documentación de \emph{ARM
+No he encontrado tanta información como me gustaría acerca de este tema, a parte de la documentación de \emph{ARM
 Keil} \autocite[\text{Event Flag Management}]{keil_function_reference}.
 
-Por el momento podemos comentar que contamos con 6 rutinas, con las que podemos realizar toda la gestión de eventos:
+En esta se comenta que para la programación basada en eventos contamos con 6 rutinas, con las que podemos realizar toda la gestión de eventos:
 \begin{samepage}
 \begin{center}
 \begin{tabular}{ | c | >{\centering\arraybackslash}m{11cm} | }
@@ -563,9 +596,97 @@ Por el momento podemos comentar que contamos con 6 rutinas, con las que podemos 
 \end{center}
 \end{samepage}
 
-\subsection{Comportamiento Apreciado}
-Aquí serán completadas todos los matices que apreciemos con este sistema en el que aún no he programado, por lo que es muy probable que se me
-escapen cosas actualmente que al momento de la implementación se añadirán aquí y donde sea correspondiente.
+Pero en general, se entra en muy poco detalle acerca de cómo funciona la comunicación interproceso. Por suerte, durante el desarrollo de la práctica me surgieron dudas, las cuales
+voy a explicar detalladamente. Además, debido a una de estas dudas encontré en el foro de Keil que el código fuente de RTX es abierto y se encuentra en la carpeta de instalación de Keil,
+lo cual ayudó a disipar muchas dudas acerca del comportamiento de funciones como \texttt{os\_evt\_wait\_or/and} sin tener que recurrir a la profesora.
+
+\subsubsection{Problema al Compilar el Proyecto}
+Nada más comenzar el primer fallo: El proyecto no compila. Parece que a varios compañeros les pasa lo mismo y nadie sabe cómo arreglarlo. Afortunadamente en este foro
+\parencite{solucionar_rtx_undefined_symbol} aclaran cuál era el problema, y nada más incluir el archivo \texttt{RTX\_config.c} ya todo funcionó correctamente.
+
+\subsubsection{Programación basada en eventos}
+Tras esto me quedaron muchas dudas acerca de la implementación de las funciones de wait y set:
+
+Las funciones \texttt{os\_evt\_wait\_or/and} eliminan todas las flags que esperan? Solo las que activaron el evento en el caso de la or\ldots? La verdad es que no tenía nada
+claro el comportamiento, y como estaba teniendo problemas con el código, no tenía claro si mis suposiciones eran ciertas o no (que al final terminaron siendo).
+
+La respuesta es clara: Tanto \texttt{os\_evt\_wait\_or} como \texttt{os\_evt\_wait\_and} eliminan las flags que están esperando. Esto se puede consultar en la implementación como comenta
+el usuario ``Måns Andersson'' en \url{https://community.arm.com/developer/tools-software/tools/f/keil-forum/39939/source-code-for-rtx} en la ruta
+\texttt{<keil-dir>$\backslash$ARM$\backslash$RL$\backslash$RTX$\backslash$SRC},
+siendo el archivo que nos interesa en nuestro caso \texttt{$\backslash$Keil$\backslash$ARM$\backslash$RL$\backslash$RTX$\backslash$SRC$\backslash$ARM$\backslash$rt\_Event.c}, donde podemos
+ver claramente en la función
+\begin{minted}{c}
+    OS_RESULT os_evt_wait (U16 wait_flags, U16 timeout, BOOL and_wait)    
+\end{minted}
+lo mencionado en los comentarios:
+\begin{minted}{c}
+    if (and_wait) {
+        /* Check for AND-connected events */
+
+        /* Aquí podemos ver claramente que es una AND, a parte de por
+         * el comentario de arriba, porque el and lógico se compara
+         * con las wait_flags, devolviendo solamente 1 si coinciden
+         * todas y cada una de ellas
+         */
+        if ((os_runtask->events & wait_flags) == wait_flags) {
+        os_runtask->events &= ~wait_flags; // **1**
+        tsk_unlock();
+        return (OS_R_EVT);
+        }
+        block_state = WAIT_AND;
+    }
+    else {
+        /* Check for OR-connected events */
+        /* Y aquí podemos ver que es una OR, porque unicamente
+         * checkeamos que alguna de ellas sea 1
+         */
+        if (os_runtask->events & wait_flags) {
+        os_runtask->waits = os_runtask->events & wait_flags;
+        os_runtask->events &= ~wait_flags; // **2**
+        tsk_unlock();
+        return (OS_R_EVT);
+        }
+        block_state = WAIT_OR;
+    }
+\end{minted}
+
+en especial las líneas con los comentarios \texttt{// **1**  } y \texttt{// **2**  }, que indican claramente
+que cuando el wait se activa, sólamente las flags por las que estamos esperando se ponen a cero (\texttt{os\_runtask->events \&= $\thicksim$wait\_flags;}).
+Esto quiere decir que (menos mal) no tenemos que hacer \texttt{os\_evt\_clr} al terminar un wait.
+
+\subsubsection{Más detalle de los eventos}
+Realmente, mirando los manuales de programación no hay mucha información acerca de los mismos, a parte de cómo se usan, y no tanto cómo funcionan, pero en \autocite[28]{rl_arm_gs}
+se entra en un poco más de detalle:
+\begin{itemize}
+    \item Cuando la tarea se crea, se le asigna un TSB (Task Control Block), que sería un equivalente al PCB (Process Control Block) en sistemas *NIX
+          \parencite{process_control_block_pcb_wikipedia}, donde hay 16 bits para sus event flags, que independientemente de si el código está esperando o no se pueden setear a uno.
+          Por esta razón, en \ref{task_init} se comenta que no hay especial problema en inicializar las tareas al derecho o al revés, y que por lo tanto en \ref{generic_counting_tasks}
+          no tenemos que mandar un evento a la tarea 1 conforme ya están inicializadas ni nada similar.
+          Ya que si bien la tarea puede no haber llegado a un wait cuando se le activa un evento, al estar éste activado en la TCB, que se
+          crea a la vez que la tarea, simplemente leerá de las flags y verá que los bits en las event flags ya coinciden con su requerimiento, continuando directamente.
+\end{itemize}
+
+El resto se cubre muy por encima y no es nada que no se haya explicado previamente en clase.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                    OPINIÓN PERSONAL                                                   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\section{Opinión Personal}
+\subsection{Desafíos}
+No voy a negar que debido a no entendía muy bien el enunciado, tuve que rehacer el planteamiento de la práctica, por lo que como sugerencia para años siguiente, propondría escribir
+el enunciado de forma menos abierta a interpretación, adjuntar un pequeño esquema, o en clase el día de la presentación del enunciado.
+
+Durante la realización me bloqueé en dos fallos, el primero muy tonto (esperar por una tarea que estaba muerta por olvidarme de borrar una línea), y otro más complicado, que era el cómo
+maximizar la concurrencia hasta el punto de esta entrega, en el que podemos calcular hasta tres ángulos por adelantado, que resolví satisfactoriamente dando el resultado expuesto
+en \ref{concurrencia_angulos}.
+
+\subsection{Aprendizajes}
+A lo largo de la realización de esta práctica he aprendido un paradigma de programación multitarea basado en eventos, que al principio no parece complicado, pero es sorprendente que
+a un concepto tan simple podamos darle usos tan versátiles. Por lo que \emph{espero} haber asimilado los conceptos adecuadamente en esta última práctica de la asignatura, que la verdad
+siempre es un gusto programar en C, ya que es un lenguaje que no requiere buscar en internet tutoriales de veinte librerías y otorga mucho control, cosa que en la programación de sistemas
+empotrados es muy importante.
 
 
 \clearpage
